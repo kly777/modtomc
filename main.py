@@ -9,6 +9,46 @@ input_path = "model/nld.glb"
 mesh = tm.load_mesh(input_path)
 # mesh.show()
 
+def save_voxel_data(voxel_grid, filename):
+    """保存Voxel数据为CSV文件"""
+    # 获取体素大小和原点
+    voxel_size = voxel_grid.voxel_size
+    origin = voxel_grid.origin
+
+    # 获取所有体素
+    voxels = voxel_grid.get_voxels()
+
+    voxel_data = []
+
+    for voxel in voxels:
+        grid_index = voxel.grid_index
+        # 转换为世界坐标
+        coordinate = origin + grid_index * voxel_size
+        # 获取颜色（如果存在）
+        color = voxel.color if hasattr(voxel, "color") else [1.0, 1.0, 1.0]  # 默认白色
+
+        voxel_data.append(
+            {
+                "grid_index": grid_index.tolist(),
+                "coordinate": coordinate.tolist(),
+                "color": color.tolist(),
+            }
+        )
+    with open(filename, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["x", "y", "z", "r", "g", "b"])
+        for data in voxel_data:
+            writer.writerow(
+                [
+                    data["grid_index"][0],
+                    data["grid_index"][1],
+                    data["grid_index"][2],
+                    data["color"][0],
+                    data["color"][1],
+                    data["color"][2],
+                ]
+            )
+
 
 def check_mesh_colors(mesh):
     """检查网格的颜色信息"""
@@ -99,59 +139,23 @@ check_mesh_colors(mesh)
 
 # 提取顶点数据
 points = mesh.vertices
+
 colors = mesh.visual.vertex_colors
 
 # 创建点云对象
 point_cloud = tm.PointCloud(points, colors)
-# point_cloud.show()
+
+
 point_cloud.export("output_point_cloud.ply", file_type="ply")
 
 pcd = o3d.io.read_point_cloud("output_point_cloud.ply")
 
 block_size = 0.024
-voxel_size = block_size/4
+voxel_size = block_size / 2
 
 # 创建体素网格
 voxel_grid = o3d.geometry.VoxelGrid.create_from_point_cloud(pcd, voxel_size=voxel_size)
-# o3d.visualization.draw_geometries([voxel_grid])
+o3d.visualization.draw_geometries([voxel_grid])
 
-# 获取体素大小和原点
-voxel_size = voxel_grid.voxel_size
-origin = voxel_grid.origin
+save_voxel_data(voxel_grid, "output_voxel_grid.csv")
 
-# 获取所有体素
-voxels = voxel_grid.get_voxels()
-
-voxel_data = []
-
-for voxel in voxels:
-    grid_index = voxel.grid_index
-    # 转换为世界坐标
-    coordinate = origin + grid_index * voxel_size
-    # 获取颜色（如果存在）
-    color = voxel.color if hasattr(voxel, "color") else [1.0, 1.0, 1.0]  # 默认白色
-
-    voxel_data.append(
-        {
-            "grid_index": grid_index.tolist(),
-            "coordinate": coordinate.tolist(),
-            "color": color.tolist(),
-        }
-    )
-
-
-
-with open("voxel_data.csv", "w", newline="") as f:
-    writer = csv.writer(f)
-    writer.writerow(["x", "y", "z", "r", "g", "b"])
-    for data in voxel_data:
-        writer.writerow(
-            [
-                data["grid_index"][0],
-                data["grid_index"][1],
-                data["grid_index"][2],
-                data["color"][0],
-                data["color"][1],
-                data["color"][2],
-            ]
-        )

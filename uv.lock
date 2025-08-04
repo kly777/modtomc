@@ -891,6 +891,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "ipykernel" },
     { name = "open3d" },
+    { name = "pandas" },
     { name = "pillow" },
     { name = "pyglet" },
     { name = "pyvista", extra = ["jupyter"] },
@@ -903,6 +904,7 @@ dependencies = [
 requires-dist = [
     { name = "ipykernel", specifier = ">=6.30.0" },
     { name = "open3d", specifier = ">=0.19.0" },
+    { name = "pandas", specifier = ">=2.3.1" },
     { name = "pillow", specifier = ">=11.3.0" },
     { name = "pyglet", specifier = "<2" },
     { name = "pyvista", extras = ["jupyter"], specifier = ">=0.45.3" },
