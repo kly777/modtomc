@@ -9,6 +9,7 @@ input_path = "model/nld.glb"
 mesh = tm.load_mesh(input_path)
 # mesh.show()
 
+
 def save_voxel_data(voxel_grid, filename):
     """保存Voxel数据为CSV文件"""
     # 获取体素大小和原点
@@ -85,7 +86,7 @@ def check_mesh_colors(mesh):
     print("==================\n")
 
 
-check_mesh_colors(mesh)
+# check_mesh_colors(mesh)
 
 
 def apply_colors_from_material(mesh):
@@ -131,7 +132,7 @@ def apply_colors_from_material(mesh):
 apply_colors_from_material(mesh)
 
 # 再次检查网格颜色信息
-check_mesh_colors(mesh)
+# check_mesh_colors(mesh)
 
 # 显示网格
 
@@ -150,12 +151,23 @@ point_cloud.export("output_point_cloud.ply", file_type="ply")
 
 pcd = o3d.io.read_point_cloud("output_point_cloud.ply")
 
-block_size = 0.024
-voxel_size = block_size / 2
+block_size = 0.030
 
 # 创建体素网格
-voxel_grid = o3d.geometry.VoxelGrid.create_from_point_cloud(pcd, voxel_size=voxel_size)
-o3d.visualization.draw_geometries([voxel_grid])
+voxel_grid_1 = o3d.geometry.VoxelGrid.create_from_point_cloud(
+    pcd, voxel_size=block_size
+)
+voxel_grid_2 = o3d.geometry.VoxelGrid.create_from_point_cloud(
+    pcd, voxel_size=block_size / 2
+)
+voxel_grid_4= o3d.geometry.VoxelGrid.create_from_point_cloud(
+    pcd, voxel_size=block_size / 4
+)
 
-save_voxel_data(voxel_grid, "output_voxel_grid.csv")
+o3d.visualization.draw_geometries([voxel_grid_1])
+o3d.visualization.draw_geometries([voxel_grid_2])
+o3d.visualization.draw_geometries([voxel_grid_4])
 
+save_voxel_data(voxel_grid_1, "tmp/output_voxel_grid_1.csv")
+save_voxel_data(voxel_grid_2, "tmp/output_voxel_grid_2.csv")
+save_voxel_data(voxel_grid_4, "tmp/output_voxel_grid_4.csv")
