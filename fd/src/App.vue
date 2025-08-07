@@ -3,7 +3,7 @@ import World from './components/World.vue'
 </script>
 
 <template>
-  <div>Hello</div>
+  <div>Hello {{ new Date() }}</div>
   <World />
 </template>
 
