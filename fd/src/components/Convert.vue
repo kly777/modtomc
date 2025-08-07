@@ -1,0 +1,157 @@
+<template>
+  <div class="converter">
+    <!-- 文件选择 -->
+    <input type="file" accept=".glb" @change="handleFileChange" class="file-input" />
+
+    <!-- 状态显示 -->
+    <div v-if="status" class="status">{{ status }}</div>
+
+    <!-- 上传按钮 -->
+    <button @click="uploadFile" :disabled="!selectedFile || uploading" class="upload-btn">
+      {{ uploading ? '处理中...' : '上传并转换' }}
+    </button>
+
+    <!-- CSV数据展示 -->
+    <div v-if="csvData.length" class="result">
+      <h3>转换结果预览</h3>
+      <table class="csv-table">
+        <thead>
+          <tr>
+            <th v-for="(header, i) in csvHeaders" :key="i">{{ header }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(row, i) in csvData" :key="i">
+            <td v-for="(cell, j) in row" :key="j">{{ cell }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref } from 'vue'
+import Papa from 'papaparse'
+import axios from 'axios'
+
+// 响应式状态
+const selectedFile = ref<File | null>(null)
+const status = ref('')
+const uploading = ref(false)
+const csvData = ref<string[][]>([])
+const csvHeaders = ref<string[]>([])
+
+// 文件选择处理
+const handleFileChange = (event: Event) => {
+  const target = event.target as HTMLInputElement
+  if (target.files && target.files.length > 0) {
+    const file = target.files[0]
+    if (file.type !== 'model/gltf-binary' && !file.name.endsWith('.glb')) {
+      alert('请选择有效的GLB文件')
+      return
+    }
+    selectedFile.value = file
+    status.value = `已选择文件: ${file.name}`
+  }
+}
+
+// 文件上传处理
+const uploadFile = async () => {
+  if (!selectedFile.value) return
+
+  const formData = new FormData()
+  formData.append('file', selectedFile.value)
+
+  uploading.value = true
+  status.value = '正在上传并处理...'
+
+  try {
+    // 发送请求（注意设置responseType为blob）
+    const response = await axios.post('http://localhost:8080/convert', formData, {
+      responseType: 'blob',
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    })
+
+    // 创建下载链接
+    const downloadUrl = window.URL.createObjectURL(new Blob([response.data]))
+    const link = document.createElement('a')
+    link.href = downloadUrl
+    link.setAttribute('download', selectedFile.value.name.replace('.glb', '.csv'))
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+
+    // 解析CSV数据用于展示
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = Papa.parse(reader.result as string, {
+        preview: 20 // 只预览前10行
+      })
+      csvHeaders.value = result.data[0] as string[]
+      csvData.value = result.data.slice(1) as string[][]
+    }
+    reader.readAsText(response.data)
+
+    status.value = '转换完成，文件已下载'
+  } catch (error) {
+    console.error('转换失败:', error)
+    status.value = '转换失败，请重试'
+    alert('文件处理失败')
+  } finally {
+    uploading.value = false
+  }
+}
+</script>
+
+<style scoped>
+.file-input {
+  margin: 1rem 0;
+}
+
+.status {
+  margin: 1rem 0;
+  color: #666;
+}
+
+.upload-btn {
+  padding: 0.5rem 1rem;
+  background: #42b983;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-bottom: 2rem;
+}
+
+.upload-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.result {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.csv-table {
+  border-collapse: collapse;
+  width: 100%;
+  max-width: 800px;
+  margin: 1rem 0;
+}
+
+.csv-table th,
+.csv-table td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.csv-table th {
+  background-color: #f5f5f5;
+}
+</style>

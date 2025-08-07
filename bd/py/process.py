@@ -5,9 +5,10 @@ import numpy as np
 import trimesh as tm
 import csv
 import open3d as o3d
+import sys
 
-input_path = "model/nld.glb"
-mesh = tm.load_mesh(input_path)
+
+
 # mesh.show()
 
 
@@ -106,7 +107,7 @@ def apply_colors_from_material(mesh):
             and mesh.visual.vertex_colors is not None
         ):
             print(f"顶点颜色已应用: 是 (形状: {mesh.visual.vertex_colors.shape})")
-            print(f"顶点颜色示例 (前5个): {mesh.visual.vertex_colors[:5]}")
+            print(f"顶点颜色示例 (前几个): {mesh.visual.vertex_colors[:3]}")
 
             # 从顶点颜色计算面颜色（每个面取其顶点颜色的平均值）
             if hasattr(mesh, "faces") and mesh.faces is not None:
@@ -129,47 +130,60 @@ def apply_colors_from_material(mesh):
 
     print("==================\n")
 
-
-# 从材质应用颜色到顶点和面
-apply_colors_from_material(mesh)
-
-# 再次检查网格颜色信息
-# check_mesh_colors(mesh)
-
-# 显示网格
-
-# mesh.export("output.ply")
-
-# 提取顶点数据
-points = mesh.vertices
-
-colors = mesh.visual.vertex_colors
-
-# 创建点云对象
-point_cloud = tm.PointCloud(points, colors)
+def main(glb_path, csv_path):
+    input_path = glb_path
+    mesh = tm.load_mesh(input_path)
 
 
-point_cloud.export("output_point_cloud.ply", file_type="ply")
+    # 从材质应用颜色到顶点和面
+    apply_colors_from_material(mesh)
 
-pcd = o3d.io.read_point_cloud("output_point_cloud.ply")
+    # 再次检查网格颜色信息
+    # check_mesh_colors(mesh)
 
-block_size = 0.030
+    # 显示网格
 
-# 创建体素网格
-voxel_grid_1 = o3d.geometry.VoxelGrid.create_from_point_cloud(
-    pcd, voxel_size=block_size
-)
-voxel_grid_2 = o3d.geometry.VoxelGrid.create_from_point_cloud(
-    pcd, voxel_size=block_size / 2
-)
-voxel_grid_4= o3d.geometry.VoxelGrid.create_from_point_cloud(
-    pcd, voxel_size=block_size / 4
-)
+    # mesh.export("output.ply")
 
-o3d.visualization.draw_geometries([voxel_grid_1])
-o3d.visualization.draw_geometries([voxel_grid_2])
-o3d.visualization.draw_geometries([voxel_grid_4])
+    # 提取顶点数据
+    points = mesh.vertices
 
-save_voxel_data(voxel_grid_1, "tmp/output_voxel_grid_1.csv")
-save_voxel_data(voxel_grid_2, "tmp/output_voxel_grid_2.csv")
-save_voxel_data(voxel_grid_4, "tmp/output_voxel_grid_4.csv")
+    colors = mesh.visual.vertex_colors
+
+    # 创建点云对象
+    point_cloud = tm.PointCloud(points, colors)
+
+
+    point_cloud.export("output_point_cloud.ply", file_type="ply")
+
+    pcd = o3d.io.read_point_cloud("output_point_cloud.ply")
+
+    block_size = 0.030
+
+    # 创建体素网格
+    voxel_grid_1 = o3d.geometry.VoxelGrid.create_from_point_cloud(
+        pcd, voxel_size=block_size
+    )
+    voxel_grid_2 = o3d.geometry.VoxelGrid.create_from_point_cloud(
+        pcd, voxel_size=block_size / 2
+    )
+    voxel_grid_4= o3d.geometry.VoxelGrid.create_from_point_cloud(
+        pcd, voxel_size=block_size / 4
+    )
+
+    o3d.visualization.draw_geometries([voxel_grid_1])
+    o3d.visualization.draw_geometries([voxel_grid_2])
+    o3d.visualization.draw_geometries([voxel_grid_4])
+
+    save_voxel_data(voxel_grid_1, csv_path)
+    # save_voxel_data(voxel_grid_2, "tmp/output_voxel_grid_2.csv")
+    # save_voxel_data(voxel_grid_4, "tmp/output_voxel_grid_4.csv")
+
+if __name__ == "__main__":
+    if len(sys.argv) != 3:
+        print("Usage: python process.py <input_glb_path> <output_csv_path>")
+        sys.exit(1)
+
+    glb_path = sys.argv[1]
+    csv_path = sys.argv[2]
+    main(glb_path, csv_path)

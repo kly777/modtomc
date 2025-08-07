@@ -12,18 +12,33 @@ import (
 )
 
 const (
-	uploadDir   = "in"
+	inputDir    = "in"
 	outputDir   = "out"
 	pyScriptDir = "py"
 )
 
 func main() {
+	log.Println("启动服务...")
+
 	// 创建必要目录
-	for _, dir := range []string{uploadDir, outputDir} {
+	for _, dir := range []string{inputDir, outputDir} {
 		os.MkdirAll(dir, os.ModePerm)
 	}
 
 	http.HandleFunc("/convert", func(w http.ResponseWriter, r *http.Request) {
+
+		// 添加CORS响应头
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+		// 处理预检请求
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		log.Println("收到请求...")
 		// 限制上传文件大小为100MB
 		r.ParseMultipartForm(100 << 20)
 
@@ -42,7 +57,7 @@ func main() {
 		}
 
 		// 创建上传文件路径
-		glbPath := filepath.Join(uploadDir, handler.Filename)
+		glbPath := filepath.Join(inputDir, handler.Filename)
 		dst, err := os.Create(glbPath)
 		if err != nil {
 			http.Error(w, "Unable to create the file", http.StatusInternalServerError)
@@ -61,12 +76,14 @@ func main() {
 		csvPath := filepath.Join(outputDir, csvFilename)
 
 		// 3. 执行Python脚本
-		cmd := exec.Command("python", 
-			filepath.Join(pyScriptDir, "process.py"),
-			glbPath,
-			csvPath,
+		cmd := exec.Command("uv", "run",
+			filepath.Join("process.py"),
+			"../" + glbPath,
+			"../" + csvPath,
 		)
-		
+
+		cmd.Dir = "py"
+
 		// 记录执行日志（可选）
 		cmd.Stdout = log.Writer()
 		cmd.Stderr = log.Writer()
@@ -97,8 +114,7 @@ func main() {
 		// 5. 清理临时文件（异步执行）
 		go func() {
 			os.Remove(glbPath)
-			// 可选：保留CSV文件或清理
-			// os.Remove(csvPath)
+			os.Remove(csvPath)
 		}()
 	})
 
