@@ -1,4 +1,4 @@
-const textureCache = new Map<string, THREE.Texture>();
+export const textureCache = new Map<string, THREE.Texture>();
 export type Position = [number, number, number];
 async function loadTexture(path: string): Promise<THREE.Texture> {
     if (textureCache.has(path)) return textureCache.get(path)!;
@@ -15,6 +15,8 @@ export abstract class Block {
     constructor(pos: Position) {
         this.pos = pos;
     }
+
+    abstract getMaterial(face: string): THREE.Material;
 }
 
 export type FullBlockMaterials = {
@@ -123,15 +125,57 @@ export class UpAndDownBlock extends FullBlock {
 
 export class HalfBlock extends Block {
     direction: "up" | "down" = "down";
+    private material: THREE.Material;
+
+    constructor(pos: Position) {
+        super(pos);
+        this.material = new THREE.MeshStandardMaterial({
+            color: 0xa0522d,
+            map: new THREE.TextureLoader().load("/textures/stone_bricks.jpg"),
+        });
+    }
+
+    getMaterial(face: string): THREE.Material {
+        return this.material;
+    }
 
     generateGeometry(): THREE.BoxGeometry {
         return new THREE.BoxGeometry(1, 0.5, 1);
     }
+}
 
-    generateMaterial(): THREE.Material {
-        return new THREE.MeshStandardMaterial({
-            color: 0xa0522d,
-            map: new THREE.TextureLoader().load("/textures/stone_bricks.jpg"),
+export function getMaterialKey(material: THREE.Material): string {
+    if (material instanceof THREE.MeshStandardMaterial) {
+        return JSON.stringify({
+            type: 'standard',
+            color: material.color.getHex(),
+            map: material.map ? material.map.image.src : null
         });
+    } else if (material instanceof THREE.MeshBasicMaterial) {
+        return JSON.stringify({
+            type: 'basic',
+            color: material.color.getHex(),
+            map: material.map ? material.map.image.src : null
+        });
+    }
+    return JSON.stringify({ type: 'unknown' });
+}
+
+export function parseMaterialFromKey(key: string): THREE.Material {
+    const data = JSON.parse(key);
+    switch (data.type) {
+        case 'standard':
+            const mat = new THREE.MeshStandardMaterial({
+                color: data.color
+            });
+            if (data.map) {
+                const texture = textureCache.get(data.map);
+                if (texture) mat.map = texture;
+            }
+            return mat;
+        case 'basic':
+            return new THREE.MeshBasicMaterial({ color: data.color });
+        default:
+            return new THREE.MeshStandardMaterial({ color: 0xffffff });
     }
 }

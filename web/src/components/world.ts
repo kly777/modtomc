@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { Block, FullBlock, FullBlockWithPureColor, type Position } from "./Block";
+import { Block, FullBlock, FullBlockWithPureColor, type Position, textureCache } from "./Block";
 
 export class MCWorld {
     cellSize: number;
@@ -121,6 +121,11 @@ export class MCWorld {
         const normals: number[] = [];
         const indices: number[] = [];
         const uvs: number[] = [];
+        const materialIndices: number[] = []; // 新增材质索引数组
+
+        // 材质缓存（用于去重）
+        const materialCache = new Map<string, number>();
+        let materialIdCounter = 0;
 
         const startX = cellX * cellSize;
         const startY = cellY * cellSize;
@@ -146,6 +151,18 @@ export class MCWorld {
                             if (!neighbor) {
                                 const ndx = positions.length / 3;
 
+                                // 获取当前面的材质
+                                const material = block.getMaterial(face);
+
+                                // 生成唯一材质标识
+                                const materialKey = this.getMaterialKey(material);
+                                let materialIndex = materialCache.get(materialKey);
+
+                                if (materialIndex === undefined) {
+                                    materialIndex = materialIdCounter++;
+                                    materialCache.set(materialKey, materialIndex);
+                                }
+
                                 // 添加顶点
                                 for (const pos of corners) {
                                     positions.push(
@@ -160,6 +177,7 @@ export class MCWorld {
                                         pos[0] === 0 ? 0 : 1,
                                         pos[1] === 0 ? 0 : 1
                                     );
+                                    materialIndices.push(materialIndex); // 记录材质索引
                                 }
 
                                 // 添加三角形索引
@@ -178,7 +196,44 @@ export class MCWorld {
             }
         }
 
-        return { positions, normals, indices, uvs };
+        return { positions, normals, indices, uvs, materialIndices, materialCache };
+    }
+
+    getMaterialKey(material: THREE.Material): string {
+        if (material instanceof THREE.MeshStandardMaterial) {
+            return JSON.stringify({
+                type: 'standard',
+                color: material.color.getHex(),
+                map: material.map ? material.map.image.src : null
+            });
+        } else if (material instanceof THREE.MeshBasicMaterial) {
+            return JSON.stringify({
+                type: 'basic',
+                color: material.color.getHex(),
+                map: material.map ? material.map.image.src : null
+            });
+        }
+        return JSON.stringify({ type: 'unknown' });
+    }
+
+    parseMaterialFromKey(key: string): THREE.Material {
+        const data = JSON.parse(key);
+        switch (data.type) {
+            case 'standard':
+                const mat = new THREE.MeshStandardMaterial({
+                    color: data.color
+                });
+                if (data.map) {
+                    // 从全局缓存获取纹理
+                    const texture = textureCache.get(data.map);
+                    if (texture) mat.map = texture;
+                }
+                return mat;
+            case 'basic':
+                return new THREE.MeshBasicMaterial({ color: data.color });
+            default:
+                return new THREE.MeshStandardMaterial({ color: 0xffffff });
+        }
     }
 }
 

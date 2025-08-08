@@ -123,16 +123,12 @@ onMounted(() => {
 });
 
 function updateGeometry(world: MCWorld, scene: THREE.Scene) {
-  const { positions, normals, indices } = world.generateGeometryDataForCell(0, 0, 0);
+  const { positions, normals, indices, uvs, materialIndices, materialCache } = world.generateGeometryDataForCell(0, 0, 0);
   const geometry = new THREE.BufferGeometry();
-  const material = new THREE.MeshLambertMaterial({
-    color: 0xffffff,
-    vertexColors: false,
-    side: THREE.DoubleSide
-  });
 
   const positionNumComponents = 3;
   const normalNumComponents = 3;
+  const uvNumComponents = 2;
 
   geometry.setAttribute(
     'position',
@@ -144,10 +140,43 @@ function updateGeometry(world: MCWorld, scene: THREE.Scene) {
     new THREE.BufferAttribute(new Float32Array(normals), normalNumComponents)
   );
 
+  geometry.setAttribute(
+    'uv',
+    new THREE.BufferAttribute(new Float32Array(uvs), uvNumComponents)
+  );
+
   geometry.setIndex(indices);
   geometry.computeBoundingSphere();
 
-  const mesh = new THREE.Mesh(geometry, material);
+  // 生成材质数组
+  const materials: THREE.Material[] = [];
+  // 根据materialCache创建材质数组（按索引顺序）
+  // 注意：materialCache是一个Map<string, number>，我们需要按索引顺序创建材质数组
+  // 创建一个临时数组，长度为materialCache.size
+  const tempMaterials: THREE.Material[] = new Array(materialCache.size);
+  materialCache.forEach((index, key) => {
+    tempMaterials[index] = world.parseMaterialFromKey(key);
+  });
+  materials.push(...tempMaterials);
+
+  // 设置组（groups）以指定每个面的材质索引
+  const groups: { start: number, count: number, materialIndex: number }[] = [];
+  // 每个面对应6个索引（两个三角形）
+  const faceCount = indices.length / 6;
+  for (let faceIndex = 0; faceIndex < faceCount; faceIndex++) {
+    // 每个面在顶点数组中的起始索引（每个面4个顶点）
+    const startVertexIndex = faceIndex * 4;
+    // 该面的材质索引
+    const materialIndex = materialIndices[startVertexIndex];
+    groups.push({
+      start: faceIndex * 6, // 该面在索引数组中的起始位置
+      count: 6, // 6个索引（两个三角形）
+      materialIndex
+    });
+  }
+  geometry.groups = groups;
+
+  const mesh = new THREE.Mesh(geometry, materials);
   scene.add(mesh);
 }
 
