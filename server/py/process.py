@@ -1,16 +1,10 @@
-from os import mkdir
-from turtle import color
-import json
 import numpy as np
 import trimesh as tm
 import csv
 import open3d as o3d
 import sys
 
-
-
 # mesh.show()
-
 
 def save_voxel_data(voxel_grid, filename):
     """保存Voxel数据为CSV文件"""
@@ -130,7 +124,7 @@ def apply_colors_from_material(mesh):
 
     print("==================\n")
 
-def main(glb_path, csv_path):
+def main(glb_path, csv_path,block_size):
     input_path = glb_path
     mesh = tm.load_mesh(input_path)
 
@@ -158,32 +152,33 @@ def main(glb_path, csv_path):
 
     pcd = o3d.io.read_point_cloud("output_point_cloud.ply")
 
-    block_size = 0.030
+    # block_size = 0.030
 
     # 创建体素网格
     voxel_grid_1 = o3d.geometry.VoxelGrid.create_from_point_cloud(
         pcd, voxel_size=block_size
     )
-    voxel_grid_2 = o3d.geometry.VoxelGrid.create_from_point_cloud(
-        pcd, voxel_size=block_size / 2
-    )
-    voxel_grid_4= o3d.geometry.VoxelGrid.create_from_point_cloud(
-        pcd, voxel_size=block_size / 4
-    )
+    # voxel_grid_2 = o3d.geometry.VoxelGrid.create_from_point_cloud(
+    #     pcd, voxel_size=block_size / 2
+    # )
+    # voxel_grid_4= o3d.geometry.VoxelGrid.create_from_point_cloud(
+    #     pcd, voxel_size=block_size / 4
+    # )
 
-    o3d.visualization.draw_geometries([voxel_grid_1])
-    o3d.visualization.draw_geometries([voxel_grid_2])
-    o3d.visualization.draw_geometries([voxel_grid_4])
+    # o3d.visualization.draw_geometries([voxel_grid_1])
+    # o3d.visualization.draw_geometries([voxel_grid_2])
+    # o3d.visualization.draw_geometries([voxel_grid_4])
 
     save_voxel_data(voxel_grid_1, csv_path)
     # save_voxel_data(voxel_grid_2, "tmp/output_voxel_grid_2.csv")
     # save_voxel_data(voxel_grid_4, "tmp/output_voxel_grid_4.csv")
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print("Usage: python process.py <input_glb_path> <output_csv_path>")
+    if len(sys.argv) != 4:
+        print("Usage: python process.py <input_glb_path> <output_csv_path> <block_size>")
         sys.exit(1)
 
     glb_path = sys.argv[1]
     csv_path = sys.argv[2]
-    main(glb_path, csv_path)
+    block_size =float(sys.argv[3])
+    main(glb_path, csv_path,block_size)

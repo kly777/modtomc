@@ -1,0 +1,160 @@
+<template>
+  <div class="world">
+    <canvas id="c" ref="canvas"></canvas>
+  </div>
+</template>
+
+<style scoped>
+#c {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.world {
+  min-width: 200px;
+  min-height: 200px;
+}
+</style>
+
+<script setup lang="ts">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { inject, onMounted, ref } from 'vue';
+import { EventBusSymbol, VOXEL_DATA_EVENT, type EventBus, type VoxelData } from '../eventBus';
+import { MCWorld, type BlockData } from './world';
+import { FullBlockWithPureColor, type Position } from './Block';
+
+const eventBus = inject<EventBus>(EventBusSymbol)
+const canvas = ref<HTMLCanvasElement | null>(null);
+
+onMounted(() => {
+  if (!canvas.value) return;
+  const fov = 75;
+  const aspect = 2;  // the canvas default
+  const near = 0.1;
+  const far = 500;
+  const camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
+  camera.position.set(128, 128, 5);
+  camera.lookAt(0, 0, 0);
+
+  const controls = new OrbitControls(camera, canvas.value);
+  controls.target.set(0, 0, 0);
+  controls.update();
+
+  const renderer = new THREE.WebGLRenderer({ canvas: canvas.value });
+
+  const cellSize = 128;
+  const world = new MCWorld(cellSize);
+
+  // 初始化测试方块
+  const testBlocks: BlockData[] = [];
+  for (let y = 0; y < cellSize; ++y) {
+    for (let z = 0; z < cellSize; ++z) {
+      for (let x = 0; x < cellSize; ++x) {
+        const height = (Math.cos(x / cellSize * Math.PI * 2) + Math.cos(z / cellSize * Math.PI * 3)) * (cellSize / 6) + (cellSize / 2);
+        if (y < height) {
+          const color = new THREE.Color(
+            Math.random() * 0.5 + 0.5,
+            Math.random() * 0.5 + 0.5,
+            Math.random() * 0.5 + 0.5
+          );
+          testBlocks.push({
+            position: [x, y, z] as Position,
+            block: new FullBlockWithPureColor([x, y, z], color)
+          });
+        }
+      }
+    }
+  }
+  world.setBlocks(testBlocks);
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(173 / 256, 216 / 256, 230 / 256);
+
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.5); // 环境光
+  const directionalLight = new THREE.DirectionalLight(0xffffff, 1); // 平行光
+  directionalLight.position.set(50, 100, 50); // 光照方向
+  scene.add(ambientLight, directionalLight);
+
+  // 生成初始几何体
+  updateGeometry(world, scene);
+
+  function render() {
+    if (resizeRendererToDisplaySize(renderer)) {
+      const canvas = renderer.domElement;
+      camera.aspect = canvas.clientWidth / canvas.clientHeight;
+      camera.updateProjectionMatrix();
+    }
+    renderer.render(scene, camera);
+  }
+
+  function animate() {
+    requestAnimationFrame(animate);
+    render();
+  }
+  animate();
+
+  // 订阅点云数据更新
+  eventBus?.on(VOXEL_DATA_EVENT, (data: VoxelData[]) => {
+    console.log('Voxel data updated:', data);
+
+    // 转换点云数据为方块
+    const blocks: BlockData[] = data.map(voxel => ({
+      position: [voxel.x, voxel.y, voxel.z] as Position,
+      block: new FullBlockWithPureColor(
+        [voxel.x, voxel.y, voxel.z],
+        new THREE.Color(voxel.r, voxel.g, voxel.b)
+      )
+    }));
+
+    world.setBlocks(blocks);
+
+    // 更新几何体
+    scene.remove(scene.children.find(child => child.type === 'Mesh')!);
+    updateGeometry(world, scene);
+  });
+});
+
+function updateGeometry(world: MCWorld, scene: THREE.Scene) {
+  const { positions, normals, indices } = world.generateGeometryDataForCell(0, 0, 0);
+  const geometry = new THREE.BufferGeometry();
+  const material = new THREE.MeshLambertMaterial({
+    color: 0xffffff,
+    vertexColors: false,
+    side: THREE.DoubleSide
+  });
+
+  const positionNumComponents = 3;
+  const normalNumComponents = 3;
+
+  geometry.setAttribute(
+    'position',
+    new THREE.BufferAttribute(new Float32Array(positions), positionNumComponents)
+  );
+
+  geometry.setAttribute(
+    'normal',
+    new THREE.BufferAttribute(new Float32Array(normals), normalNumComponents)
+  );
+
+  geometry.setIndex(indices);
+  geometry.computeBoundingSphere();
+
+  const mesh = new THREE.Mesh(geometry, material);
+  scene.add(mesh);
+}
+
+
+function resizeRendererToDisplaySize(renderer: THREE.WebGLRenderer) {
+  const canvas = renderer.domElement;
+  const width = canvas.clientWidth;
+  const height = canvas.clientHeight;
+  const needResize = canvas.width !== width || canvas.height !== height;
+  if (needResize) {
+    renderer.setSize(width, height, false);
+  }
+  return needResize;
+}
+
+</script>

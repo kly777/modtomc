@@ -21,7 +21,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(row, i) in csvData" :key="i">
+          <tr v-for="(row, i) in VoxelData" :key="i">
             <td v-for="(cell, j) in row" :key="j">{{ cell }}</td>
           </tr>
         </tbody>
@@ -31,9 +31,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { inject, ref } from 'vue'
 import Papa from 'papaparse'
 import axios from 'axios'
+import { EventBusSymbol, VOXEL_DATA_EVENT, type EventBus } from '../eventBus'
 
 // 响应式状态
 const selectedFile = ref<File | null>(null)
@@ -41,6 +42,17 @@ const status = ref('')
 const uploading = ref(false)
 const csvData = ref<string[][]>([])
 const csvHeaders = ref<string[]>([])
+
+// 全局状态存储点云数据
+interface PointData {
+  x: number
+  y: number
+  z: number
+  r: number
+  g: number
+  b: number
+}
+const VoxelData = ref<PointData[]>([])
 
 // 文件选择处理
 const handleFileChange = (event: Event) => {
@@ -75,23 +87,39 @@ const uploadFile = async () => {
       }
     })
 
-    // 创建下载链接
-    const downloadUrl = window.URL.createObjectURL(new Blob([response.data]))
-    const link = document.createElement('a')
-    link.href = downloadUrl
-    link.setAttribute('download', selectedFile.value.name.replace('.glb', '.csv'))
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
+    // // 下载
+    // const downloadUrl = window.URL.createObjectURL(new Blob([response.data]))
+    // const link = document.createElement('a')
+    // link.href = downloadUrl
+    // link.setAttribute('download', selectedFile.value.name.replace('.glb', '.csv'))
+    // document.body.appendChild(link)
+    // link.click()
+    // link.remove()
 
-    // 解析CSV数据用于展示
+    // 解析CSV
     const reader = new FileReader()
     reader.onload = () => {
-      const result = Papa.parse(reader.result as string, {
-        preview: 20 // 只预览前10行
+      const result = Papa.parse<string[]>(reader.result as string, {
+
       })
       csvHeaders.value = result.data[0] as string[]
       csvData.value = result.data.slice(1) as string[][]
+
+      // 转换并存储点云数据
+      result.data.slice(1).forEach(row => {
+        if (row.length >= 6) {
+          VoxelData.value.push({
+            x: parseInt(row[0]),    // xyz作为整数
+            y: parseInt(row[1]),
+            z: parseInt(row[2]),
+            r: parseFloat(row[3]),  // rgb作为浮点数
+            g: parseFloat(row[4]),
+            b: parseFloat(row[5])
+          })
+        }
+      })
+      const eventBus = inject<EventBus>(EventBusSymbol)
+      eventBus?.emit(VOXEL_DATA_EVENT, VoxelData.value)
     }
     reader.readAsText(response.data)
 

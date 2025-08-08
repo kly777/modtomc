@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -74,12 +75,13 @@ func main() {
 		// 2. 构建CSV输出路径
 		csvFilename := strings.TrimSuffix(handler.Filename, ".glb") + ".csv"
 		csvPath := filepath.Join(outputDir, csvFilename)
-
+		blockSize:=0.03
 		// 3. 执行Python脚本
 		cmd := exec.Command("uv", "run",
 			filepath.Join("process.py"),
 			"../" + glbPath,
 			"../" + csvPath,
+			strconv.FormatFloat(blockSize, 'f', -1, 64),
 		)
 
 		cmd.Dir = "py"
