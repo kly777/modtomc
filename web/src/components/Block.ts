@@ -1,10 +1,3 @@
-
-type RGB = {
-    r: number;
-    g: number;
-    b: number;
-};
-
 const textureCache = new Map<string, THREE.Texture>();
 export type Position = [number, number, number];
 async function loadTexture(path: string): Promise<THREE.Texture> {

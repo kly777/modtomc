@@ -182,3 +182,4 @@ if __name__ == "__main__":
     csv_path = sys.argv[2]
     block_size =float(sys.argv[3])
     main(glb_path, csv_path,block_size)
+    print("Done!")

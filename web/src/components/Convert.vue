@@ -53,7 +53,7 @@ interface PointData {
   b: number
 }
 const VoxelData = ref<PointData[]>([])
-
+const eventBus = inject<EventBus>(EventBusSymbol)
 // 文件选择处理
 const handleFileChange = (event: Event) => {
   const target = event.target as HTMLInputElement
@@ -118,7 +118,7 @@ const uploadFile = async () => {
           })
         }
       })
-      const eventBus = inject<EventBus>(EventBusSymbol)
+
       eventBus?.emit(VOXEL_DATA_EVENT, VoxelData.value)
     }
     reader.readAsText(response.data)

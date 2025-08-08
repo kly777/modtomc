@@ -29,6 +29,7 @@ const eventBus = inject<EventBus>(EventBusSymbol)
 const canvas = ref<HTMLCanvasElement | null>(null);
 
 onMounted(() => {
+  console.log('World.vue mounted, eventBus:', eventBus); // 添加调试日志
   if (!canvas.value) return;
   const fov = 75;
   const aspect = 2;  // the canvas default
@@ -96,24 +97,29 @@ onMounted(() => {
   animate();
 
   // 订阅点云数据更新
-  eventBus?.on(VOXEL_DATA_EVENT, (data: VoxelData[]) => {
-    console.log('Voxel data updated:', data);
+  if (eventBus) {
+    console.log('Registering VOXEL_DATA_EVENT listener'); // 添加调试日志
+    eventBus.on(VOXEL_DATA_EVENT, (data: VoxelData[]) => {
+      console.log('Received VOXEL_DATA_EVENT with data:', data); // 添加详细日志
 
-    // 转换点云数据为方块
-    const blocks: BlockData[] = data.map(voxel => ({
-      position: [voxel.x, voxel.y, voxel.z] as Position,
-      block: new FullBlockWithPureColor(
-        [voxel.x, voxel.y, voxel.z],
-        new THREE.Color(voxel.r, voxel.g, voxel.b)
-      )
-    }));
+      // 转换点云数据为方块
+      const blocks: BlockData[] = data.map(voxel => ({
+        position: [voxel.x, voxel.y, voxel.z] as Position,
+        block: new FullBlockWithPureColor(
+          [voxel.x, voxel.y, voxel.z],
+          new THREE.Color(voxel.r, voxel.g, voxel.b)
+        )
+      }));
 
-    world.setBlocks(blocks);
+      world.setBlocks(blocks);
 
-    // 更新几何体
-    scene.remove(scene.children.find(child => child.type === 'Mesh')!);
-    updateGeometry(world, scene);
-  });
+      // 更新几何体
+      scene.remove(scene.children.find(child => child.type === 'Mesh')!);
+      updateGeometry(world, scene);
+    });
+  } else {
+    console.error('EventBus not available in World.vue');
+  }
 });
 
 function updateGeometry(world: MCWorld, scene: THREE.Scene) {

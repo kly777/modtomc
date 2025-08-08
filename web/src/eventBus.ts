@@ -1,4 +1,4 @@
-import { inject, ref } from "vue";
+import { ref } from "vue";
 
 // 定义点云数据类型
 export interface VoxelData {
@@ -24,18 +24,27 @@ export interface EventBus {
     on(event: string, callback: (data: any) => void): void;
 }
 
-export const createEventBus = (): EventBus => {
-    const listeners: Map<string, Set<(data: any) => void>> = new Map();
+// 创建单例事件总线实例
+let eventBusInstance: EventBus | null = null;
 
-    return {
-        emit(event, data) {
-            listeners.get(event)?.forEach((callback) => callback(data));
-        },
-        on(event, callback) {
-            if (!listeners.has(event)) {
-                listeners.set(event, new Set());
-            }
-            listeners.get(event)?.add(callback);
-        },
-    };
+export const createEventBus = (): EventBus => {
+    if (!eventBusInstance) {
+        const listeners: Map<string, Set<(data: any) => void>> = new Map();
+        
+        eventBusInstance = {
+            emit(event, data) {
+                listeners.get(event)?.forEach((callback) => callback(data));
+            },
+            on(event, callback) {
+                if (!listeners.has(event)) {
+                    listeners.set(event, new Set());
+                }
+                listeners.get(event)?.add(callback);
+            },
+        };
+    }
+    return eventBusInstance;
 };
+
+// 导出单例事件总线
+export const eventBus = createEventBus();
