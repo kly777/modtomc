@@ -23,7 +23,8 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { inject, onMounted, ref } from 'vue';
 import { EventBusSymbol, VOXEL_DATA_EVENT, type EventBus, type VoxelData } from '../eventBus';
 import { MCWorld, type BlockData } from './world';
-import { FullBlockWithPureColor, type Position } from './Block';
+
+import {type Position, FullBlockWithPureColor } from './Block';
 
 const eventBus = inject<EventBus>(EventBusSymbol)
 const canvas = ref<HTMLCanvasElement | null>(null);
@@ -65,7 +66,7 @@ onMounted(() => {
           );
           testBlocks.push({
             position: [x, y, z] as Position,
-            block: new FullBlockWithPureColor([x, y, z], color)
+            block: new FullBlockWithPureColor(color)
           });
         }
       }
@@ -117,7 +118,6 @@ onMounted(() => {
       const blocks: BlockData[] = data.map(voxel => ({
         position: [voxel.x, voxel.y, voxel.z] as Position,
         block: new FullBlockWithPureColor(
-          [voxel.x, voxel.y, voxel.z],
           new THREE.Color(voxel.r, voxel.g, voxel.b)
         )
       }));

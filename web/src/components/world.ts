@@ -1,77 +1,9 @@
 import * as THREE from "three";
-import { Block, FullBlock, FullBlockWithPureColor, type Position, textureCache } from "./Block";
+import { type Position, Block, FullBlockWithPureColor, textureCache } from "./Block";
 
 export class MCWorld {
     cellSize: number;
 
-    faces = [
-        {
-            // left
-            dir: [-1, 0, 0],
-            corners: [
-                [0, 1, 0],
-                [0, 0, 0],
-                [0, 1, 1],
-                [0, 0, 1],
-            ],
-            face: "left" as const,
-        },
-        {
-            // right
-            dir: [1, 0, 0],
-            corners: [
-                [1, 1, 1],
-                [1, 0, 1],
-                [1, 1, 0],
-                [1, 0, 0],
-            ],
-            face: "right" as const,
-        },
-        {
-            // bottom
-            dir: [0, -1, 0],
-            corners: [
-                [1, 0, 1],
-                [0, 0, 1],
-                [1, 0, 0],
-                [0, 0, 0],
-            ],
-            face: "bottom" as const,
-        },
-        {
-            // top
-            dir: [0, 1, 0],
-            corners: [
-                [0, 1, 1],
-                [1, 1, 1],
-                [0, 1, 0],
-                [1, 1, 0],
-            ],
-            face: "top" as const,
-        },
-        {
-            // back
-            dir: [0, 0, -1],
-            corners: [
-                [1, 0, 0],
-                [0, 0, 0],
-                [1, 1, 0],
-                [0, 1, 0],
-            ],
-            face: "back" as const,
-        },
-        {
-            // front
-            dir: [0, 0, 1],
-            corners: [
-                [0, 0, 1],
-                [1, 0, 1],
-                [0, 1, 1],
-                [1, 1, 1],
-            ],
-            face: "front" as const,
-        },
-    ];
 
     blocks: (Block | null)[];
     cellSliceSize: number;
@@ -147,7 +79,10 @@ export class MCWorld {
                     const block = this.getBlock(voxelX, voxelY, voxelZ);
 
                     if (block) {
-                        for (const { dir, corners, face } of this.faces) {
+                        // 获取方块的所有面
+                        const faces = block.getFaces();
+                        for (const face of faces) {
+                            const dir = face.normal;
                             const neighbor = this.getBlock(
                                 voxelX + dir[0],
                                 voxelY + dir[1],
@@ -158,50 +93,42 @@ export class MCWorld {
                             if (!neighbor) {
                                 const ndx = positions.length / 3;
 
-                                // 获取当前面的材质
-                                const material = block.getMaterial(face);
+                                const material = face.material;
 
                                 // 生成唯一材质标识
-                                const materialKey =
-                                    this.getMaterialKey(material);
-                                let materialIndex =
-                                    materialCache.get(materialKey);
+                                const materialKey = this.getMaterialKey(material);
+                                let materialIndex = materialCache.get(materialKey);
 
                                 if (materialIndex === undefined) {
                                     materialIndex = materialIdCounter++;
-                                    materialCache.set(
-                                        materialKey,
-                                        materialIndex
-                                    );
+                                    materialCache.set(materialKey, materialIndex);
                                 }
 
-                                // 添加顶点
-                                for (const pos of corners) {
+                                // 使用面的几何信息添加顶点
+                                for (const corner of face.corners) {
                                     positions.push(
-                                        pos[0] + x,
-                                        pos[1] + y,
-                                        pos[2] + z
+                                        corner[0] + x,
+                                        corner[1] + y,
+                                        corner[2] + z
                                     );
-                                    normals.push(...dir);
+                                    normals.push(...face.normal);
+                                }
 
-                                    // 添加UV坐标（简单映射）
-                                    uvs.push(
-                                        pos[0] === 0 ? 0 : 1,
-                                        pos[1] === 0 ? 0 : 1
-                                    );
-                                    // 添加顶点时记录材质索引
+                                // 添加UV坐标
+                                for (const uv of face.uv) {
+                                    uvs.push(uv[0], uv[1]);
+                                }
+
+                                // 添加三角形索引（每个面由两个三角形组成）
+                                indices.push(
+                                    ndx, ndx + 1, ndx + 2,
+                                    ndx + 2, ndx + 1, ndx + 3
+                                );
+
+                                // 为每个顶点记录材质索引
+                                for (let i = 0; i < 4; i++) {
                                     materialIndices.push(materialIndex);
                                 }
-
-                                // 添加三角形索引
-                                indices.push(
-                                    ndx,
-                                    ndx + 1,
-                                    ndx + 2,
-                                    ndx + 2,
-                                    ndx + 1,
-                                    ndx + 3
-                                );
                             }
                         }
                     }
