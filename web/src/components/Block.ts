@@ -9,6 +9,8 @@ async function loadTexture(path: string): Promise<THREE.Texture> {
 
 import * as THREE from "three";
 
+
+
 export abstract class Block {
     pos: Position;
 
@@ -147,33 +149,33 @@ export class HalfBlock extends Block {
 export function getMaterialKey(material: THREE.Material): string {
     if (material instanceof THREE.MeshStandardMaterial) {
         return JSON.stringify({
-            type: 'standard',
+            type: "standard",
             color: material.color.getHex(),
-            map: material.map ? material.map.image.src : null
+            map: material.map ? material.map.image.src : null,
         });
     } else if (material instanceof THREE.MeshBasicMaterial) {
         return JSON.stringify({
-            type: 'basic',
+            type: "basic",
             color: material.color.getHex(),
-            map: material.map ? material.map.image.src : null
+            map: material.map ? material.map.image.src : null,
         });
     }
-    return JSON.stringify({ type: 'unknown' });
+    return JSON.stringify({ type: "unknown" });
 }
 
 export function parseMaterialFromKey(key: string): THREE.Material {
     const data = JSON.parse(key);
     switch (data.type) {
-        case 'standard':
+        case "standard":
             const mat = new THREE.MeshStandardMaterial({
-                color: data.color
+                color: data.color,
             });
             if (data.map) {
                 const texture = textureCache.get(data.map);
                 if (texture) mat.map = texture;
             }
             return mat;
-        case 'basic':
+        case "basic":
             return new THREE.MeshBasicMaterial({ color: data.color });
         default:
             return new THREE.MeshStandardMaterial({ color: 0xffffff });

@@ -28,7 +28,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(row, i) in VoxelData" :key="i">
+          <tr v-for="(row, i) in VoxelData.slice(0,20)" :key="i" >
             <td v-for="(cell, j) in row" :key="j">{{ cell }}</td>
           </tr>
         </tbody>
