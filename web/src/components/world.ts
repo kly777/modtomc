@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { type Position, Block, FullBlockWithPureColor, textureCache } from "./Block";
+import { type Position, Block, textureCache } from "./Block";
 
 export class MCWorld {
     cellSize: number;

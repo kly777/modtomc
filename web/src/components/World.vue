@@ -24,7 +24,7 @@ import { inject, onMounted, ref } from 'vue';
 import { EventBusSymbol, VOXEL_DATA_EVENT, type EventBus, type VoxelData } from '../eventBus';
 import { MCWorld, type BlockData } from './world';
 
-import {type Position, FullBlockWithPureColor } from './Block';
+import { type Position, FullBlockWithPureColor } from './Block';
 
 const eventBus = inject<EventBus>(EventBusSymbol)
 const canvas = ref<HTMLCanvasElement | null>(null);
@@ -104,6 +104,21 @@ onMounted(() => {
 
   function animate() {
     requestAnimationFrame(animate);
+    // 视锥体剔除
+    const frustum = new THREE.Frustum();
+    frustum.setFromProjectionMatrix(
+      new THREE.Matrix4().multiplyMatrices(
+        camera.projectionMatrix,
+        camera.matrixWorldInverse
+      )
+    );
+
+    scene.traverse(object => {
+      if (object instanceof THREE.Mesh) {
+        object.visible = frustum.intersectsObject(object);
+      }
+    });
+
     render();
   }
   animate();
