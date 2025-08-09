@@ -28,6 +28,9 @@ import { FullBlockWithPureColor, type Position } from './Block';
 const eventBus = inject<EventBus>(EventBusSymbol)
 const canvas = ref<HTMLCanvasElement | null>(null);
 
+const cellSize = 128;
+const world = new MCWorld(cellSize);
+
 onMounted(() => {
   console.log('World.vue mounted, eventBus:', eventBus); // 添加调试日志
   if (!canvas.value) return;
@@ -45,20 +48,20 @@ onMounted(() => {
 
   const renderer = new THREE.WebGLRenderer({ canvas: canvas.value });
 
-  const cellSize = 128;
-  const world = new MCWorld(cellSize);
+
+
 
   // 初始化测试方块
   const testBlocks: BlockData[] = [];
   for (let y = 0; y < cellSize; ++y) {
-    for (let z = 0; z < cellSize; ++z) {
-      for (let x = 0; x < cellSize; ++x) {
+    for (let z = 0; z < cellSize / 3; ++z) {
+      for (let x = 0; x < cellSize / 3; ++x) {
         const height = (Math.cos(x / cellSize * Math.PI * 2) + Math.cos(z / cellSize * Math.PI * 3)) * (cellSize / 6) + (cellSize / 2);
         if (y < height) {
           const color = new THREE.Color(
-            Math.random() * 0.5 + 0.5,
-            Math.random() * 0.5 + 0.5,
-            Math.random() * 0.5 + 0.5
+            Math.random() * 0.7 + 0.3,
+            Math.random() * 0.7 + 0.3,
+            Math.random() * 0.7 + 0.3
           );
           testBlocks.push({
             position: [x, y, z] as Position,
@@ -77,6 +80,14 @@ onMounted(() => {
   const directionalLight = new THREE.DirectionalLight(0xffffff, 1); // 平行光
   directionalLight.position.set(50, 100, 50); // 光照方向
   scene.add(ambientLight, directionalLight);
+
+  const gridHelper = new THREE.GridHelper(cellSize, cellSize / 16); // 格点大小为 cellSize，每 1/8 cellSize 一个格子
+  gridHelper.position.x = cellSize / 2;
+  gridHelper.position.z = cellSize / 2;
+
+  scene.add(gridHelper);
+
+
 
   // 生成初始几何体
   updateGeometry(world, scene);
@@ -159,7 +170,7 @@ function updateGeometry(world: MCWorld, scene: THREE.Scene) {
   });
   materials.push(...tempMaterials);
 
-  // 设置组（groups）以指定每个面的材质索引
+  // 设置几何分组（groups）以指定每个面的材质索引
   const groups: { start: number, count: number, materialIndex: number }[] = [];
   // 每个面对应6个索引（两个三角形）
   const faceCount = indices.length / 6;
@@ -175,7 +186,7 @@ function updateGeometry(world: MCWorld, scene: THREE.Scene) {
     });
   }
   geometry.groups = groups;
-
+  // geometry 的不同部分与材质的对应关系通过 材质索引（materialIndex） 和 几何分组（geometry.groups） 实现
   const mesh = new THREE.Mesh(geometry, materials);
   scene.add(mesh);
 }

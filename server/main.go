@@ -75,7 +75,12 @@ func main() {
 		// 2. 构建CSV输出路径
 		csvFilename := strings.TrimSuffix(handler.Filename, ".glb") + ".csv"
 		csvPath := filepath.Join(outputDir, csvFilename)
-		blockSize:=0.03
+		// 从请求中获取blockSize参数，默认为0.03
+		blockSizeStr := r.FormValue("blockSize")
+		blockSize, err := strconv.ParseFloat(blockSizeStr, 64)
+		if err != nil {
+			blockSize = 0.03 // 如果解析失败，使用默认值
+		}
 		// 3. 执行Python脚本
 		cmd := exec.Command("uv", "run",
 			filepath.Join("process.py"),

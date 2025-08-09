@@ -3,6 +3,12 @@
     <!-- 文件选择 -->
     <input type="file" accept=".glb" @change="handleFileChange" class="file-input" />
 
+    <!-- 添加blockSize参数输入 -->
+    <div class="block-size-input">
+      <label>方块大小:</label>
+      <input type="number" v-model.number="blockSize" step="0.01" min="0.01" />
+    </div>
+
     <!-- 状态显示 -->
     <div v-if="status" class="status">{{ status }}</div>
 
@@ -14,6 +20,7 @@
     <!-- CSV数据展示 -->
     <div v-if="csvData.length" class="result">
       <h3>转换结果预览</h3>
+      <p>共{{ VoxelData.length }}个方块</p>
       <table class="csv-table">
         <thead>
           <tr>
@@ -42,6 +49,7 @@ const status = ref('')
 const uploading = ref(false)
 const csvData = ref<string[][]>([])
 const csvHeaders = ref<string[]>([])
+const blockSize = ref(0.03) // 默认方块大小
 
 // 全局状态存储点云数据
 interface PointData {
@@ -74,6 +82,8 @@ const uploadFile = async () => {
 
   const formData = new FormData()
   formData.append('file', selectedFile.value)
+  // 添加blockSize参数
+  formData.append('blockSize', blockSize.value.toString())
 
   uploading.value = true
   status.value = '正在上传并处理...'
@@ -106,8 +116,10 @@ const uploadFile = async () => {
       csvData.value = result.data.slice(1) as string[][]
 
       // 转换并存储点云数据
+      VoxelData.value = []
       result.data.slice(1).forEach(row => {
         if (row.length >= 6) {
+
           VoxelData.value.push({
             x: parseInt(row[0]),    // xyz作为整数
             y: parseInt(row[1]),

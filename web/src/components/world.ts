@@ -91,12 +91,19 @@ export class MCWorld {
     }
 
     getBlock(x: number, y: number, z: number): Block | null {
-      // 检查坐标是否在世界范围内
-      if (x < 0 || x >= this.cellSize || y < 0 || y >= this.cellSize || z < 0 || z >= this.cellSize) {
-        return null;
-      }
-      const index = this.computeVoxelIndex(x, y, z);
-      return this.blocks[index];
+        // 检查坐标是否在世界范围内
+        if (
+            x < 0 ||
+            x >= this.cellSize ||
+            y < 0 ||
+            y >= this.cellSize ||
+            z < 0 ||
+            z >= this.cellSize
+        ) {
+            return null;
+        }
+        const index = this.computeVoxelIndex(x, y, z);
+        return this.blocks[index];
     }
 
     setBlock(x: number, y: number, z: number, block: Block) {
@@ -155,12 +162,17 @@ export class MCWorld {
                                 const material = block.getMaterial(face);
 
                                 // 生成唯一材质标识
-                                const materialKey = this.getMaterialKey(material);
-                                let materialIndex = materialCache.get(materialKey);
+                                const materialKey =
+                                    this.getMaterialKey(material);
+                                let materialIndex =
+                                    materialCache.get(materialKey);
 
                                 if (materialIndex === undefined) {
                                     materialIndex = materialIdCounter++;
-                                    materialCache.set(materialKey, materialIndex);
+                                    materialCache.set(
+                                        materialKey,
+                                        materialIndex
+                                    );
                                 }
 
                                 // 添加顶点
@@ -177,7 +189,8 @@ export class MCWorld {
                                         pos[0] === 0 ? 0 : 1,
                                         pos[1] === 0 ? 0 : 1
                                     );
-                                    materialIndices.push(materialIndex); // 记录材质索引
+                                    // 添加顶点时记录材质索引
+                                    materialIndices.push(materialIndex);
                                 }
 
                                 // 添加三角形索引
@@ -196,32 +209,40 @@ export class MCWorld {
             }
         }
 
-        return { positions, normals, indices, uvs, materialIndices, materialCache };
+        return {
+            positions,
+            normals,
+            indices,
+            uvs,
+            materialIndices,
+            materialCache,
+        };
     }
 
+    // 每种材质生成唯一标识（基于材质类型、颜色、纹理路径）。
     getMaterialKey(material: THREE.Material): string {
         if (material instanceof THREE.MeshStandardMaterial) {
             return JSON.stringify({
-                type: 'standard',
+                type: "standard",
                 color: material.color.getHex(),
-                map: material.map ? material.map.image.src : null
+                map: material.map ? material.map.image.src : null,
             });
         } else if (material instanceof THREE.MeshBasicMaterial) {
             return JSON.stringify({
-                type: 'basic',
+                type: "basic",
                 color: material.color.getHex(),
-                map: material.map ? material.map.image.src : null
+                map: material.map ? material.map.image.src : null,
             });
         }
-        return JSON.stringify({ type: 'unknown' });
+        return JSON.stringify({ type: "unknown" });
     }
 
     parseMaterialFromKey(key: string): THREE.Material {
         const data = JSON.parse(key);
         switch (data.type) {
-            case 'standard':
+            case "standard":
                 const mat = new THREE.MeshStandardMaterial({
-                    color: data.color
+                    color: data.color,
                 });
                 if (data.map) {
                     // 从全局缓存获取纹理
@@ -229,7 +250,7 @@ export class MCWorld {
                     if (texture) mat.map = texture;
                 }
                 return mat;
-            case 'basic':
+            case "basic":
                 return new THREE.MeshBasicMaterial({ color: data.color });
             default:
                 return new THREE.MeshStandardMaterial({ color: 0xffffff });
