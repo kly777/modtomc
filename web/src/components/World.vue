@@ -20,20 +20,25 @@
 <script setup lang="ts">
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { inject, onMounted, ref } from 'vue';
-import { EventBusSymbol, VOXEL_DATA_EVENT, type EventBus, type VoxelData } from '../eventBus';
+import { onMounted, ref, watch } from 'vue';
 import { MCWorld, type BlockData } from './world';
 
-import { type Position, FullBlockWithPureColor } from './Block';
+const props = defineProps<{
+  blocks: BlockData[]
+}>();
 
-const eventBus = inject<EventBus>(EventBusSymbol)
 const canvas = ref<HTMLCanvasElement | null>(null);
 
 const cellSize = 128;
 const world = new MCWorld(cellSize);
 
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(173 / 256, 216 / 256, 230 / 256);
+
+
 onMounted(() => {
-  console.log('World.vue mounted, eventBus:', eventBus); // 添加调试日志
+
   if (!canvas.value) return;
   const fov = 75;
   const aspect = 2;  // the canvas default
@@ -53,29 +58,28 @@ onMounted(() => {
 
 
   // 初始化测试方块
-  const testBlocks: BlockData[] = [];
-  for (let y = 0; y < cellSize; ++y) {
-    for (let z = 0; z < cellSize / 3; ++z) {
-      for (let x = 0; x < cellSize / 3; ++x) {
-        const height = (Math.cos(x / cellSize * Math.PI * 2) + Math.cos(z / cellSize * Math.PI * 3)) * (cellSize / 6) + (cellSize / 2);
-        if (y < height) {
-          const color = new THREE.Color(
-            Math.random() * 0.7 + 0.3,
-            Math.random() * 0.7 + 0.3,
-            Math.random() * 0.7 + 0.3
-          );
-          testBlocks.push({
-            position: [x, y, z] as Position,
-            block: new FullBlockWithPureColor(color)
-          });
-        }
-      }
-    }
-  }
-  world.setBlocks(testBlocks);
+  // const testBlocks: BlockData[] = [];
+  // for (let y = 0; y < cellSize; ++y) {
+  //   for (let z = 0; z < cellSize / 3; ++z) {
+  //     for (let x = 0; x < cellSize / 3; ++x) {
+  //       const height = (Math.cos(x / cellSize * Math.PI * 2) + Math.cos(z / cellSize * Math.PI * 3)) * (cellSize / 6) + (cellSize / 2);
+  //       if (y < height) {
+  //         const color = new THREE.Color(
+  //           Math.random() * 0.7 + 0.3,
+  //           Math.random() * 0.7 + 0.3,
+  //           Math.random() * 0.7 + 0.3
+  //         );
+  //         testBlocks.push({
+  //           position: [x, y, z] as Position,
+  //           block: new FullBlockWithPureColor(color)
+  //         });
+  //       }
+  //     }
+  //   }
+  // }
+  world.setBlocks(props.blocks);
 
-  const scene = new THREE.Scene();
-  scene.background = new THREE.Color(173 / 256, 216 / 256, 230 / 256);
+
 
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.5); // 环境光
   const directionalLight = new THREE.DirectionalLight(0xffffff, 1); // 平行光
@@ -122,31 +126,16 @@ onMounted(() => {
     render();
   }
   animate();
-
-  // 订阅点云数据更新
-  if (eventBus) {
-    console.log('Registering VOXEL_DATA_EVENT listener'); // 添加调试日志
-    eventBus.on(VOXEL_DATA_EVENT, (data: VoxelData[]) => {
-      console.log('Received VOXEL_DATA_EVENT with data:', data); // 添加详细日志
-
-      // 转换点云数据为方块
-      const blocks: BlockData[] = data.map(voxel => ({
-        position: [voxel.x, voxel.y, voxel.z] as Position,
-        block: new FullBlockWithPureColor(
-          new THREE.Color(voxel.r, voxel.g, voxel.b)
-        )
-      }));
-
-      world.setBlocks(blocks);
-
-      // 更新几何体
-      scene.remove(scene.children.find(child => child.type === 'Mesh')!);
-      updateGeometry(world, scene);
-    });
-  } else {
-    console.error('EventBus not available in World.vue');
-  }
 });
+
+watch(() => props.blocks, (newBlocks) => {
+  world.setBlocks(newBlocks);
+
+  // 更新几何体
+  scene.remove(scene.children.find(child => child.type === 'Mesh')!);
+  updateGeometry(world, scene);
+  console.log(`Blocks updated: ${newBlocks.length} blocks`);
+}, { deep: true });
 
 function updateGeometry(world: MCWorld, scene: THREE.Scene) {
   const { positions, normals, indices, uvs, materialIndices, materialCache } = world.generateGeometryDataForCell(0, 0, 0);

@@ -28,7 +28,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(row, i) in VoxelData.slice(0,20)" :key="i" >
+          <tr v-for="(row, i) in VoxelData.slice(0, 20)" :key="i">
             <td v-for="(cell, j) in row" :key="j">{{ cell }}</td>
           </tr>
         </tbody>
@@ -38,10 +38,15 @@
 </template>
 
 <script setup lang="ts">
-import { inject, ref } from 'vue'
+import { ref } from 'vue'
 import Papa from 'papaparse'
 import axios from 'axios'
-import { EventBusSymbol, VOXEL_DATA_EVENT, type EventBus } from '../eventBus'
+
+const VoxelData = defineModel<PointData[]>({
+  type: Array,
+  required: true
+});
+
 
 // 响应式状态
 const selectedFile = ref<File | null>(null)
@@ -60,8 +65,10 @@ interface PointData {
   g: number
   b: number
 }
-const VoxelData = ref<PointData[]>([])
-const eventBus = inject<EventBus>(EventBusSymbol)
+
+
+
+// const eventBus = inject<EventBus>(EventBusSymbol)
 // 文件选择处理
 const handleFileChange = (event: Event) => {
   const target = event.target as HTMLInputElement
@@ -116,22 +123,22 @@ const uploadFile = async () => {
       csvData.value = result.data.slice(1) as string[][]
 
       // 转换并存储点云数据
-      VoxelData.value = []
+      // 创建新数组并赋值以触发响应式更新
+      const newVoxelData: PointData[] = [];
       result.data.slice(1).forEach(row => {
         if (row.length >= 6) {
-
-          VoxelData.value.push({
-            x: parseInt(row[0]),    // xyz作为整数
+          newVoxelData.push({
+            x: parseInt(row[0]),
             y: parseInt(row[1]),
             z: parseInt(row[2]),
-            r: parseFloat(row[3]),  // rgb作为浮点数
+            r: parseFloat(row[3]),
             g: parseFloat(row[4]),
             b: parseFloat(row[5])
-          })
+          });
         }
-      })
-
-      eventBus?.emit(VOXEL_DATA_EVENT, VoxelData.value)
+      });
+      VoxelData.value = newVoxelData;
+      // eventBus?.emit(VOXEL_DATA_EVENT, VoxelData.value)
     }
     reader.readAsText(response.data)
 
