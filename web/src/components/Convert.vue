@@ -41,6 +41,7 @@
 import { ref } from 'vue'
 import Papa from 'papaparse'
 import axios from 'axios'
+import { type PointData } from './data';
 
 const VoxelData = defineModel<PointData[]>({
   type: Array,
@@ -56,19 +57,7 @@ const csvData = ref<string[][]>([])
 const csvHeaders = ref<string[]>([])
 const blockSize = ref(0.03) // 默认方块大小
 
-// 全局状态存储点云数据
-interface PointData {
-  x: number
-  y: number
-  z: number
-  r: number
-  g: number
-  b: number
-}
 
-
-
-// const eventBus = inject<EventBus>(EventBusSymbol)
 // 文件选择处理
 const handleFileChange = (event: Event) => {
   const target = event.target as HTMLInputElement
@@ -104,15 +93,6 @@ const uploadFile = async () => {
       }
     })
 
-    // // 下载
-    // const downloadUrl = window.URL.createObjectURL(new Blob([response.data]))
-    // const link = document.createElement('a')
-    // link.href = downloadUrl
-    // link.setAttribute('download', selectedFile.value.name.replace('.glb', '.csv'))
-    // document.body.appendChild(link)
-    // link.click()
-    // link.remove()
-
     // 解析CSV
     const reader = new FileReader()
     reader.onload = () => {
@@ -128,12 +108,18 @@ const uploadFile = async () => {
       result.data.slice(1).forEach(row => {
         if (row.length >= 6) {
           newVoxelData.push({
-            x: parseInt(row[0]),
-            y: parseInt(row[1]),
-            z: parseInt(row[2]),
-            r: parseFloat(row[3]),
-            g: parseFloat(row[4]),
-            b: parseFloat(row[5])
+            position:
+            {
+              x: parseInt(row[0]),
+              y: parseInt(row[1]),
+              z: parseInt(row[2]),
+            },
+            color: {
+              r: parseFloat(row[3]),
+              g: parseFloat(row[4]),
+              b: parseFloat(row[5])
+            }
+
           });
         }
       });

@@ -1,66 +1,58 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import Convert from './components/Convert.vue';
 import World from './components/World.vue';
+import GLBImporter from './components/GLBImporter.vue';
 import type { BlockData } from './components/world';
 import { FullBlockWithPureColor } from './components/Block';
 import * as THREE from 'three';
-import { compute } from 'three/tsl';
-interface PointData {
-  x: number
-  y: number
-  z: number
-  r: number
-  g: number
-  b: number
-}
-// 创建事件总线实例并提供给所有子组件
-// const eventBus = createEventBus();
-// provide(EventBusSymbol, eventBus);
-const voxelData = ref<PointData[]>([{
-  x: 0,
-  y: 0,
-  z: 0,
-  r: 0,
-  g: 0.5,
-  b: 0.5
-}]);
+import type { PointData } from './components/data';
+import { voxelizeGLB } from './components/GLBUploader';
+const glbFile = ref<File | null>(null);
+const blockSize = ref(0.02);
+
+const voxelData = ref<PointData[]>([]);
+
+// 使用 watch 监听依赖
+watch([glbFile, blockSize], ([newFile, newSize]) => {
+  if (newFile) {
+    voxelizeGLB(newFile, newSize)
+      .then((data) => {
+        voxelData.value = data.voxelData; // 更新 ref 的值
+      })
+      .catch((error) => {
+        console.error('GLB转换失败:', error);
+      });
+  }
+});
+
 const convertedBlocks = computed<BlockData[]>(() => {
   return voxelData.value.map(voxel => ({
-    position: [voxel.x, voxel.y, voxel.z],
+    position: [voxel.position.x, voxel.position.y, voxel.position.z],
     block: new FullBlockWithPureColor(
-      new THREE.Color(voxel.r, voxel.g, voxel.b)
+      new THREE.Color(voxel.color.r, voxel.color.g, voxel.color.b)
     )
   }));
 });
-// watch(
-//   () => voxelData,
-//   (newData) => {
-//     if (newData) {
-//       convertedBlocks.value = newData.value.map(voxel => ({
-//         position: [voxel.x, voxel.y, voxel.z],
-//         block: new FullBlockWithPureColor(
-//           new THREE.Color(voxel.r, voxel.g, voxel.b)
-//         )
-//       }));
-//     }
-//   },
-//   { deep: true }
-// );
-
 </script>
 
 <template>
-  <div>Hello {{ new Date() }}</div>
   <div class="container">
-    <div>
-      <Convert v-model="voxelData" />
+    <div class="panel">
+      <GLBImporter v-model="glbFile" />
+      <div>
+        <input type="number" v-model="blockSize" step="0.001" min="0.001" max="100" />
+        {{ blockSize }}
+      </div>
     </div>
-    <div>
-      <World :blocks="convertedBlocks" />
+    <div class="result">
+      <div class="before show">
+        <World :blocks="convertedBlocks" />
+      </div>
+      <div class="after show">
+        <World :blocks="convertedBlocks" />
+      </div>
     </div>
   </div>
-
 </template>
 
 <style scoped>
@@ -68,6 +60,24 @@ const convertedBlocks = computed<BlockData[]>(() => {
   display: flex;
   flex-direction: row;
   align-items: stretch;
-  height: 100vh;
+  height: 100%;
+}
+
+.panel {
+  width: 300px;
+  background-color: #f0f0f0;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.result {
+  flex: 1;
+  background-color: #ffffff;
+  height: 100%;
+  gap: 20px;
+  box-sizing: border-box;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 </style>
