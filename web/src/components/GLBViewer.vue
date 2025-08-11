@@ -1,6 +1,6 @@
 <template>
-  <BaseThreeScene v-slot="{ scene }">
-    <GLBContent :scene="scene" :file="file" />
+  <BaseThreeScene v-slot="{ scene, camera }">
+    <GLBContent :scene="scene" :file="file" :camera="camera" :scale="scale" />
   </BaseThreeScene>
 </template>
 
@@ -10,5 +10,6 @@ import GLBContent from './GLBContent.vue';
 
 defineProps<{
   file: File | null;
+  scale?: number; // 可选的缩放参数
 }>();
 </script>

@@ -46,6 +46,8 @@ const mcBlocks = computed<BlockData[]>(() => {
     )
   }));
 });
+
+
 </script>
 
 <template>
@@ -59,7 +61,7 @@ const mcBlocks = computed<BlockData[]>(() => {
     </div>
     <div class="grid">
       <div class="top-left">
-        <GLBViewer :file="glbFile" />
+        <GLBViewer :file="glbFile" :scale="1/blockSize" />
       </div>
       <div class="top-right">
         <World :blocks="convertedBlocks" />
@@ -89,7 +91,10 @@ const mcBlocks = computed<BlockData[]>(() => {
   padding: 20px;
 }
 
-.top-left, .top-right, .bottom-left, .bottom-right {
+.top-left,
+.top-right,
+.bottom-left,
+.bottom-right {
   background-color: #ffffff;
   overflow: hidden;
   position: relative;

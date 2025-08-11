@@ -6,8 +6,8 @@ export const sceneConfig = {
   backgroundColor: new THREE.Color(0xffffff),
 
   // 相机初始位置和朝向
-  cameraPosition: new THREE.Vector3(16, 5, 40),
-  cameraLookAt: new THREE.Vector3(19, 0, 0),
+  cameraPosition: new THREE.Vector3(32, 10, 40),
+  cameraLookAt: new THREE.Vector3(16, 5, 0),
 
   // 环境光设置
   ambientLight: {

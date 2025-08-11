@@ -25,7 +25,6 @@ const camera = new THREE.PerspectiveCamera(
   1000
 );
 camera.position.copy(sceneConfig.cameraPosition);
-camera.lookAt(sceneConfig.cameraLookAt);
 
 // 创建渲染器
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -35,6 +34,8 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.dampingFactor = 0.05;
 controls.enableDamping = true;
+controls.target.copy(sceneConfig.cameraLookAt);
+controls.update();
 
 // 添加灯光
 const ambientLight = new THREE.AmbientLight(
