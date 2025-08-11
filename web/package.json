@@ -12,6 +12,8 @@
     "@types/papaparse": "^5.3.16",
     "@types/three": "^0.179.0",
     "axios": "^1.11.0",
+    "color-space": "^2.3.2",
+    "ml-kmeans": "^6.0.0",
     "papaparse": "^5.5.3",
     "three": "^0.179.1",
     "vue": "^3.5.17"
