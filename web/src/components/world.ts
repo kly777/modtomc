@@ -176,13 +176,13 @@ export class MCWorld {
 
                 const texture = loadTexture(material.str)
                 if (texture) {
-                    return new THREE.MeshStandardMaterial({ map: texture });
+                    return new THREE.MeshBasicMaterial({ map: texture });
                 } else {
                     console.warn(`Texture not found: ${material.str}`);
-                    return new THREE.MeshStandardMaterial({ color: 0xffffff });
+                    return new THREE.MeshBasicMaterial({ color: 0xffffff });
                 }
             default:
-                return new THREE.MeshStandardMaterial({ color: 0xffffff });
+                return new THREE.MeshBasicMaterial({ color: 0xffffff });
         }
     }
 }
