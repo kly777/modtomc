@@ -14,7 +14,7 @@ export function findPic(RGB: RGB): string | null {
   let closestBlock: BlockInfo | null = null;
 
   for (const block of BlockInfo) {
-    if (block.type === "null" || !block.full) continue;
+    if (block.type !== "null" || !block.full) continue;
 
     // 使用标准差总和作为过滤条件 (更合理的阈值)
     const stdSum = Math.sqrt(block.var_r) + Math.sqrt(block.var_g) + Math.sqrt(block.var_b);

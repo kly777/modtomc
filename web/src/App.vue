@@ -10,6 +10,7 @@ import type { PointData } from './components/data';
 import { voxelizeGLB } from './components/GLBUploader';
 import { findPic } from './findPic';
 import { clusterPoints } from './cluster';
+import { smooth } from './smooth';
 
 const glbFile = ref<File | null>(null);
 const blockSize = ref(0.02);
@@ -18,7 +19,7 @@ const blockSize = ref(0.02);
 const voxelData = ref<PointData[]>([]);
 
 // 使用 watch 监听依赖
-watch([glbFile, blockSize], ([newFile, newSize]) => {
+watch([glbFile, blockSize], async ([newFile, newSize]) => {
   if (newFile) {
     voxelizeGLB(newFile, newSize)
       .then((data) => {
@@ -30,12 +31,22 @@ watch([glbFile, blockSize], ([newFile, newSize]) => {
   }
 });
 
+const smoothVoxelData = ref<PointData[]>([]);
+
+const radius = ref(1);
+// 监听 voxelData 的变化，进行平滑处理
+watch([voxelData, radius], async ([newData, radius]) => {
+  // smoothVoxelData.value = smooth(newData, { radius: radius });
+  smoothVoxelData.value = newData
+})
+
+
 const clusteredVoxelData = ref<PointData[]>([]);
 
-const k = ref(10); // 聚类的点数
+const k = ref(8);
 // 监听 voxelData 的变化，进行聚类处理
-watch([voxelData, k], ([newVoxelData, newK]) => {
-  clusteredVoxelData.value = clusterPoints(newVoxelData, newK);
+watch([smoothVoxelData, k], async ([newVoxelData, newEpsilon]) => {
+  clusteredVoxelData.value = clusterPoints(newVoxelData, newEpsilon);
 })
 
 
@@ -48,6 +59,16 @@ const convertedBlocks = computed<BlockData[]>(() => {
     )
   }));
 });
+
+const smoothBlocks = computed<BlockData[]>(() => {
+  return smoothVoxelData.value.map(voxel => ({
+    position: [voxel.position.x, voxel.position.y, voxel.position.z],
+    block: new FullBlockWithPureColor(
+      new THREE.Color(voxel.color.r, voxel.color.g, voxel.color.b)
+    )
+  }));
+});
+
 
 const clusteredBlocks = computed<BlockData[]>(() => {
   return clusteredVoxelData.value.map(voxel => ({
@@ -78,16 +99,21 @@ const mcBlocks = computed<BlockData[]>(() => {
         <input type="number" v-model="blockSize" step="0.001" min="0.001" max="100" />
         {{ blockSize }}
       </div>
+      <div>
+        <input type="number" v-model="radius" step="0.001" min="0.001" max="100" />
+        {{ radius }}
+      </div>
       <div id="k">
         <input type="number" v-model="k" step="1" min="1" />
       </div>
     </div>
     <div class="grid">
       <div class="top-left">
-        <GLBViewer :file="glbFile" :scale="1 / blockSize" />
+        <!-- <GLBViewer :file="glbFile" :scale="1 / blockSize" /> -->
+        <World :blocks="convertedBlocks" />
       </div>
       <div class="top-right">
-        <World :blocks="convertedBlocks" />
+        <World :blocks="smoothBlocks" />
       </div>
       <div class="bottom-left">
         <World :blocks="clusteredBlocks" />
