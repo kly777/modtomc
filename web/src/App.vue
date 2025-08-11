@@ -3,13 +3,16 @@ import { computed, ref, watch } from 'vue';
 import World from './components/World.vue';
 import GLBImporter from './components/GLBImporter.vue';
 import type { BlockData } from './components/world';
-import { FullBlockWithPureColor } from './components/Block';
+import { FullBlockWithPureColor, FullBlockWithSamePic } from './components/Block';
 import * as THREE from 'three';
 import type { PointData } from './components/data';
 import { voxelizeGLB } from './components/GLBUploader';
+import { findPic } from './findPic';
+
 const glbFile = ref<File | null>(null);
 const blockSize = ref(0.02);
 
+// rgb范围为0-1
 const voxelData = ref<PointData[]>([]);
 
 // 使用 watch 监听依赖
@@ -33,6 +36,15 @@ const convertedBlocks = computed<BlockData[]>(() => {
     )
   }));
 });
+
+const mcBlocks = computed<BlockData[]>(() => {
+  return voxelData.value.map(voxel => ({
+    position: [voxel.position.x, voxel.position.y, voxel.position.z],
+    block: new FullBlockWithSamePic(
+      findPic(voxel.color) ? findPic(voxel.color)! : '',
+    )
+  }));
+});
 </script>
 
 <template>
@@ -49,7 +61,7 @@ const convertedBlocks = computed<BlockData[]>(() => {
         <World :blocks="convertedBlocks" />
       </div>
       <div class="after show">
-        <World :blocks="convertedBlocks" />
+        <World :blocks="mcBlocks" />
       </div>
     </div>
   </div>

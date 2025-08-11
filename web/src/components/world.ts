@@ -1,5 +1,19 @@
 import * as THREE from "three";
-import { type Position, Block, textureCache } from "./Block";
+import { type Position, Block } from "./Block";
+
+
+const textureCache = new Map<string, THREE.Texture>();
+
+const textureLoader = new THREE.TextureLoader();
+function loadTexture(path: string): THREE.Texture {
+    if (textureCache.has(path)) return textureCache.get(path)!;
+    const texture = textureLoader.load(path);
+    // 设置纹理过滤器
+    texture.magFilter = THREE.NearestFilter;
+    texture.minFilter = THREE.NearestFilter;
+    textureCache.set(path, texture);
+    return texture;
+}
 
 export class MCWorld {
     cellSize: number;
@@ -146,39 +160,27 @@ export class MCWorld {
         };
     }
 
-    // 每种材质生成唯一标识（基于材质类型、颜色、纹理路径）。
-    getMaterialKey(material: THREE.Material): string {
-        if (material instanceof THREE.MeshStandardMaterial) {
-            return JSON.stringify({
-                type: "standard",
-                color: material.color.getHex(),
-                map: material.map ? material.map.image.src : null,
-            });
-        } else if (material instanceof THREE.MeshBasicMaterial) {
-            return JSON.stringify({
-                type: "basic",
-                color: material.color.getHex(),
-                map: material.map ? material.map.image.src : null,
-            });
-        }
-        return JSON.stringify({ type: "unknown" });
+    // 每种材质生成唯一标识（基于新的材质类型）
+    getMaterialKey(material: { type: "color" | "imgPath"; str: string }): string {
+        return JSON.stringify(material);
     }
 
     parseMaterialFromKey(key: string): THREE.Material {
-        const data = JSON.parse(key);
-        switch (data.type) {
-            case "standard":
-                const mat = new THREE.MeshStandardMaterial({
-                    color: data.color,
+        const material = JSON.parse(key);
+        switch (material.type) {
+            case "color":
+                return new THREE.MeshBasicMaterial({
+                    color: new THREE.Color(material.str)
                 });
-                if (data.map) {
-                    // 从全局缓存获取纹理
-                    const texture = textureCache.get(data.map);
-                    if (texture) mat.map = texture;
+            case "imgPath":
+
+                const texture = loadTexture(material.str)
+                if (texture) {
+                    return new THREE.MeshStandardMaterial({ map: texture });
+                } else {
+                    console.warn(`Texture not found: ${material.str}`);
+                    return new THREE.MeshStandardMaterial({ color: 0xffffff });
                 }
-                return mat;
-            case "basic":
-                return new THREE.MeshBasicMaterial({ color: data.color });
             default:
                 return new THREE.MeshStandardMaterial({ color: 0xffffff });
         }

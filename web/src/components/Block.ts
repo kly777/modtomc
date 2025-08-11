@@ -15,7 +15,7 @@ export type FaceGeometry = {
 };
 
 export type Face = FaceGeometry & {
-  material: THREE.Material;
+  material: { type: "color" | "imgPath"; str: string };
 };
 
 
@@ -63,9 +63,9 @@ export class FullBlock extends Block {
       uv: [[0, 1], [0, 0], [1, 1], [1, 0]],
     }
   };
-  materials: Record<FullBlockFaces, THREE.Material>
+  materials: Record<FullBlockFaces, { type: "color" | "imgPath"; str: string }>
   constructor(
-    materials: Record<FullBlockFaces, THREE.Material>
+    materials: Record<FullBlockFaces, { type: "color" | "imgPath"; str: string }>
   ) {
     super();
     this.materials = materials;
@@ -91,26 +91,20 @@ export class FullBlock extends Block {
  */
 export class FullBlockWithPureColor extends FullBlock {
   constructor(color: THREE.Color) {
-    const material = new THREE.MeshBasicMaterial({ color });
+    const colorStr = `#${color.getHexString()}`;
     super({
-      top: material,
-      bottom: material,
-      front: material,
-      back: material,
-      left: material,
-      right: material,
+      top: { type: "color", str: colorStr },
+      bottom: { type: "color", str: colorStr },
+      front: { type: "color", str: colorStr },
+      back: { type: "color", str: colorStr },
+      left: { type: "color", str: colorStr },
+      right: { type: "color", str: colorStr },
     });
   }
 }
 
 
-export const textureCache = new Map<string, THREE.Texture>();
-async function loadTexture(path: string): Promise<THREE.Texture> {
-  if (textureCache.has(path)) return textureCache.get(path)!;
-  const texture = await new THREE.TextureLoader().loadAsync(path);
-  textureCache.set(path, texture);
-  return texture;
-}
+
 /**
  * 基于图片路径的六面体
  */
@@ -118,37 +112,26 @@ export class FullBlockWithPicPath extends FullBlock {
   constructor(
     picPaths: Record<FullBlockFaces, string>
   ) {
-    // 创建占位材质
-    const placeholder = new THREE.MeshStandardMaterial({ color: 0xffffff });
     super({
-      top: placeholder,
-      bottom: placeholder,
-      front: placeholder,
-      back: placeholder,
-      left: placeholder,
-      right: placeholder
-    });
-
-    // 异步加载纹理
-    this.loadMaterials(picPaths).catch(err => {
-      console.error("材质加载失败:", err);
+      top: { type: "imgPath", str: picPaths.top },
+      bottom: { type: "imgPath", str: picPaths.bottom },
+      front: { type: "imgPath", str: picPaths.front },
+      back: { type: "imgPath", str: picPaths.back },
+      left: { type: "imgPath", str: picPaths.left },
+      right: { type: "imgPath", str: picPaths.right }
     });
   }
+}
 
-  private async loadMaterials(picPaths: Record<string, string>) {
-    const materials = await Promise.all(
-      Object.entries(picPaths).map(async ([face, path]) => {
-        const texture = await loadTexture(path);
-        return {
-          face,
-          material: new THREE.MeshStandardMaterial({ map: texture })
-        };
-      })
-    );
-
-    // 更新对应面的材质
-    materials.forEach(({ face, material }) => {
-      this.materials[face as FullBlockFaces] = material;
+export class FullBlockWithSamePic extends FullBlockWithPicPath {
+  constructor(picPath: string) {
+    super({
+      top: picPath,
+      bottom: picPath,
+      front: picPath,
+      back: picPath,
+      left: picPath,
+      right: picPath
     });
   }
 }
