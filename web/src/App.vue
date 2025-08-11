@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import World from './components/World.vue';
 import GLBImporter from './components/GLBImporter.vue';
+import GLBViewer from './components/GLBViewer.vue';
 import type { BlockData } from './components/world';
 import { FullBlockWithPureColor, FullBlockWithSamePic } from './components/Block';
 import * as THREE from 'three';
@@ -56,11 +57,15 @@ const mcBlocks = computed<BlockData[]>(() => {
         {{ blockSize }}
       </div>
     </div>
-    <div class="result">
-      <div class="before show">
+    <div class="grid">
+      <div class="top-left">
+        <GLBViewer :file="glbFile" />
+      </div>
+      <div class="top-right">
         <World :blocks="convertedBlocks" />
       </div>
-      <div class="after show">
+      <div class="bottom-left"></div>
+      <div class="bottom-right">
         <World :blocks="mcBlocks" />
       </div>
     </div>
@@ -71,25 +76,30 @@ const mcBlocks = computed<BlockData[]>(() => {
 .container {
   display: flex;
   flex-direction: row;
-  align-items: stretch;
+  height: 100%;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  height: 100%;
+  gap: 10px;
+  width: 100%;
+  padding: 20px;
+}
+
+.top-left, .top-right, .bottom-left, .bottom-right {
+  background-color: #ffffff;
+  overflow: hidden;
+  position: relative;
   height: 100%;
 }
 
 .panel {
-  width: 300px;
   background-color: #f0f0f0;
   padding: 20px;
   box-sizing: border-box;
-}
-
-.result {
-  flex: 1;
-  background-color: #ffffff;
   height: 100%;
-  gap: 20px;
-  box-sizing: border-box;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
 }
 </style>

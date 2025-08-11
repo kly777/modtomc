@@ -12,21 +12,21 @@ export function findPic(RGB: RGB): string | null {
   const Lab = rgbToLab(RGB.r * 255, RGB.g * 255, RGB.b * 255);
   let minDistance = Infinity;
   let closestBlock: BlockInfo | null = null;
-  
+
   for (const block of BlockInfo) {
     if (block.type === "null" || !block.full) continue;
-    
+
     // 使用标准差总和作为过滤条件 (更合理的阈值)
     const stdSum = Math.sqrt(block.var_r) + Math.sqrt(block.var_g) + Math.sqrt(block.var_b);
     if (stdSum > 15000) continue; // 基于实际数据调整阈值
-    
+
     const distance = calculateColorDistance(Lab, block.lab);
     if (distance < minDistance) {
       minDistance = distance;
       closestBlock = block;
     }
   }
-  
+
   return closestBlock?.file_path || null;
 }
 
@@ -42,7 +42,7 @@ async function loadBlocksData() {
       const lab = rgbToLab(block.avg_r, block.avg_g, block.avg_b);
       block.lab = { L: lab.L, a: lab.a, b: lab.b };
       block.rgb = { r: block.avg_r, g: block.avg_g, b: block.avg_b };
-      
+
       // 计算并存储标准差
       block.std_r = Math.sqrt(block.var_r);
       block.std_g = Math.sqrt(block.var_g);
