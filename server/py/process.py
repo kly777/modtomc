@@ -1,3 +1,5 @@
+from multiprocessing import process
+import time
 import numpy as np
 import trimesh as tm
 import open3d as o3d
@@ -5,8 +7,6 @@ import sys
 
 
 def save_voxel_data(voxel_grid, filename):
-    """保存Voxel数据为CSV文件"""
-    # 获取体素数据
     voxels = voxel_grid.get_voxels()
     grid_indices = np.array([voxel.grid_index for voxel in voxels])
     colors = np.array(
@@ -100,9 +100,13 @@ def apply_colors_from_material(mesh):
                 #     np.uint8
                 # )  # 形状: (F, 4)
 
-                face_colors = np.mean(
-                    mesh.visual.vertex_colors[mesh.faces], axis=1
-                ).astype(np.uint8)
+                # face_colors = np.mean(
+                #     mesh.visual.vertex_colors[mesh.faces], axis=1
+                # ).astype(np.uint8)
+
+                vertex_colors = mesh.visual.vertex_colors
+                faces = mesh.faces
+                face_colors = vertex_colors[faces].mean(axis=1).astype(np.uint8)
 
                 # 将计算出的面颜色赋值给mesh.visual.face_colors
                 mesh.visual.face_colors = face_colors
@@ -117,72 +121,58 @@ def apply_colors_from_material(mesh):
 
 
 def main(glb_path, csv_path, block_size):
+    start_total = time.time()
+
+    # 1. 加载网格计时
+    start_load = time.time()
     input_path = glb_path
-    mesh = tm.load_mesh(input_path)
+    mesh = tm.load_mesh(input_path,process=False)
+    load_time = time.time() - start_load
 
-    # 从材质应用颜色到顶点和面
+    # 2. 颜色处理计时
+    start_color = time.time()
     apply_colors_from_material(mesh)
+    color_time = time.time() - start_color
 
-    # 再次检查网格颜色信息
-    # check_mesh_colors(mesh)
-
-    # 显示网格
-
-    # mesh.export("output.ply")
-
-    # 提取顶点数据
+    # 3. 点云生成计时
+    start_pcd = time.time()
     points = mesh.vertices
-
-    # colors = mesh.visual.vertex_colors
-
-    # 创建点云对象
-    # point_cloud = tm.PointCloud(points, colors)
-
-    # point_cloud.export("output_point_cloud.ply", file_type="ply")
-
-    # pcd = o3d.io.read_point_cloud("output_point_cloud.ply")
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(points)
+    pcd_time = time.time() - start_pcd
 
-    # 从顶点颜色中提取RGB通道（去除alpha通道）
-    if (
-        hasattr(mesh, "visual")
-        and mesh.visual is not None
-        and hasattr(mesh.visual, "vertex_colors")
-        and mesh.visual.vertex_colors is not None
-    ):
-        # 提取顶点颜色并归一化
+    # 4. 颜色处理计时
+    start_color2 = time.time()
+    if hasattr(mesh, "visual") and mesh.visual is not None:
         colors = mesh.visual.vertex_colors[:, :3].astype(np.float32) / 255.0
     else:
-        # 默认使用白色作为顶点颜色
-        colors = np.ones((len(points), 3), dtype=np.float64)
-
+        colors = np.ones((len(points), 3), dtype=np.float32)
     pcd.colors = o3d.utility.Vector3dVector(colors)
+    color2_time = time.time() - start_color2
 
-    # pcd = o3d.geometry.PointCloud()
-    # pcd.points = o3d.utility.Vector3dVector(points)
-    # pcd.colors = o3d.utility.Vector3dVector(colors[:,:3])  # 去除alpha通道
-
-    # block_size = 0.030
-
-    # 创建体素网格
+    # 5. 体素网格计时
+    start_voxel = time.time()
     voxel_grid_1 = o3d.geometry.VoxelGrid.create_from_point_cloud(
         pcd, voxel_size=block_size
     )
-    # voxel_grid_2 = o3d.geometry.VoxelGrid.create_from_point_cloud(
-    #     pcd, voxel_size=block_size / 2
-    # )
-    # voxel_grid_4= o3d.geometry.VoxelGrid.create_from_point_cloud(
-    #     pcd, voxel_size=block_size / 4
-    # )
+    voxel_time = time.time() - start_voxel
 
-    # o3d.visualization.draw_geometries([voxel_grid_1])
-    # o3d.visualization.draw_geometries([voxel_grid_2])
-    # o3d.visualization.draw_geometries([voxel_grid_4])
-
+    # 6. 保存数据计时
+    start_save = time.time()
     save_voxel_data(voxel_grid_1, csv_path)
-    # save_voxel_data(voxel_grid_2, "tmp/output_voxel_grid_2.csv")
-    # save_voxel_data(voxel_grid_4, "tmp/output_voxel_grid_4.csv")
+    save_time = time.time() - start_save
+
+    # 输出各阶段耗时
+    total_time = time.time() - start_total
+    print("\n=== 执行时间分析 ===")
+    print(f"网格加载: {load_time:.2f}s ({load_time / total_time:.1%})")
+    print(f"颜色处理: {color_time:.2f}s ({color_time / total_time:.1%})")
+    print(f"点云生成: {pcd_time:.2f}s ({pcd_time / total_time:.1%})")
+    print(f"颜色应用: {color2_time:.2f}s ({color2_time / total_time:.1%})")
+    print(f"体素生成: {voxel_time:.2f}s ({voxel_time / total_time:.1%})")
+    print(f"数据保存: {save_time:.2f}s ({save_time / total_time:.1%})")
+    print(f"总耗时: {total_time:.2f}s")
+    print("==================\n")
 
 
 if __name__ == "__main__":
