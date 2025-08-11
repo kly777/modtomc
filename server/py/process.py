@@ -1,86 +1,69 @@
 import numpy as np
 import trimesh as tm
-import csv
 import open3d as o3d
 import sys
 
-# mesh.show()
 
 def save_voxel_data(voxel_grid, filename):
     """保存Voxel数据为CSV文件"""
-    # 获取体素大小和原点
-    voxel_size = voxel_grid.voxel_size
-    origin = voxel_grid.origin
-
-    # 获取所有体素
+    # 获取体素数据
     voxels = voxel_grid.get_voxels()
+    grid_indices = np.array([voxel.grid_index for voxel in voxels])
+    colors = np.array(
+        [
+            voxel.color if hasattr(voxel, "color") else [1.0, 1.0, 1.0]
+            for voxel in voxels
+        ]
+    )
 
-    voxel_data = []
+    # 合并数据
+    data = np.hstack((grid_indices, colors))
 
-    for voxel in voxels:
-        grid_index = voxel.grid_index
-        # 转换为世界坐标
-        coordinate = origin + grid_index * voxel_size
-        # 获取颜色（如果存在）
-        color = voxel.color if hasattr(voxel, "color") else [1.0, 1.0, 1.0]  # 默认白色
-
-        voxel_data.append(
-            {
-                "grid_index": grid_index.tolist(),
-                "coordinate": coordinate.tolist(),
-                "color": color.tolist(),
-            }
-        )
-
-    with open(filename, "w", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(["x", "y", "z", "r", "g", "b"])
-        for data in voxel_data:
-            writer.writerow(
-                [
-                    data["grid_index"][0],
-                    data["grid_index"][1],
-                    data["grid_index"][2],
-                    data["color"][0],
-                    data["color"][1],
-                    data["color"][2],
-                ]
-            )
+    # 使用numpy写入CSV（包含表头）
+    header = "x,y,z,r,g,b"
+    np.savetxt(
+        filename,
+        data,
+        fmt="%.3f",  # 保留6位小数
+        delimiter=",",  # 逗号分隔符
+        header=header,  # 写入表头
+        comments="",  # 避免添加注释符号
+    )
 
 
-def check_mesh_colors(mesh):
-    """检查网格的颜色信息"""
-    print("=== 网格颜色信息 ===")
+# def check_mesh_colors(mesh):
+#     """检查网格的颜色信息"""
+#     print("=== 网格颜色信息 ===")
 
-    # 检查是否有顶点颜色
-    if hasattr(mesh.visual, "vertex_colors") and mesh.visual.vertex_colors is not None:
-        print(f"顶点颜色: 是 (形状: {mesh.visual.vertex_colors.shape})")
-        print(f"顶点颜色示例 (前5个): {mesh.visual.vertex_colors[:5]}")
-    else:
-        print("顶点颜色: 否")
+#     # 检查是否有顶点颜色
+#     if hasattr(mesh.visual, "vertex_colors") and mesh.visual.vertex_colors is not None:
+#         print(f"顶点颜色: 是 (形状: {mesh.visual.vertex_colors.shape})")
+#         print(f"顶点颜色示例 (前5个): {mesh.visual.vertex_colors[:5]}")
+#     else:
+#         print("顶点颜色: 否")
 
-    # 检查是否有面颜色
-    if hasattr(mesh.visual, "face_colors") and mesh.visual.face_colors is not None:
-        print(f"面颜色: 是 (形状: {mesh.visual.face_colors.shape})")
-        print(f"面颜色示例 (前5个): {mesh.visual.face_colors[:5]}")
-    else:
-        print("面颜色: 否")
+#     # 检查是否有面颜色
+#     if hasattr(mesh.visual, "face_colors") and mesh.visual.face_colors is not None:
+#         print(f"面颜色: 是 (形状: {mesh.visual.face_colors.shape})")
+#         print(f"面颜色示例 (前5个): {mesh.visual.face_colors[:5]}")
+#     else:
+#         print("面颜色: 否")
 
-    # 检查是否有材质
-    if hasattr(mesh.visual, "material"):
-        print(f"材质: 是 (类型: {type(mesh.visual.material)})")
-    else:
-        print("材质: 否")
+#     # 检查是否有材质
+#     if hasattr(mesh.visual, "material"):
+#         print(f"材质: 是 (类型: {type(mesh.visual.material)})")
+#     else:
+#         print("材质: 否")
 
-    # 检查是否有纹理
-    if hasattr(mesh.visual, "uv"):
-        print(
-            f"纹理坐标: 是 (形状: {mesh.visual.uv.shape if mesh.visual.uv is not None else 'None'})"
-        )
-    else:
-        print("纹理坐标: 否")
+#     # 检查是否有纹理
+#     if hasattr(mesh.visual, "uv"):
+#         print(
+#             f"纹理坐标: 是 (形状: {mesh.visual.uv.shape if mesh.visual.uv is not None else 'None'})"
+#         )
+#     else:
+#         print("纹理坐标: 否")
 
-    print("==================\n")
+#     print("==================\n")
 
 
 # check_mesh_colors(mesh)
@@ -88,7 +71,7 @@ def check_mesh_colors(mesh):
 
 def apply_colors_from_material(mesh):
     """从材质中提取颜色并应用到顶点和面"""
-    print("=== 从材质应用颜色 ===")
+    # print("=== 从材质应用颜色 ===")
 
     # 尝试将材质和纹理转换为颜色
     try:
@@ -100,34 +83,42 @@ def apply_colors_from_material(mesh):
             hasattr(mesh.visual, "vertex_colors")
             and mesh.visual.vertex_colors is not None
         ):
-            print(f"顶点颜色已应用: 是 (形状: {mesh.visual.vertex_colors.shape})")
-            print(f"顶点颜色示例 (前几个): {mesh.visual.vertex_colors[:3]}")
+            # print(f"顶点颜色已应用: 是 (形状: {mesh.visual.vertex_colors.shape})")
+            # print(f"顶点颜色示例 (前几个): {mesh.visual.vertex_colors[:3]}")
 
             # 从顶点颜色计算面颜色（每个面取其顶点颜色的平均值）
             if hasattr(mesh, "faces") and mesh.faces is not None:
-                face_colors = np.zeros((len(mesh.faces), 4), dtype=np.uint8)
-                for i, face in enumerate(mesh.faces):
-                    # 计算每个面的顶点颜色平均值
-                    face_vertex_colors = mesh.visual.vertex_colors[face]
-                    face_colors[i] = np.mean(face_vertex_colors, axis=0).astype(
-                        np.uint8
-                    )
+                # face_colors = np.zeros((len(mesh.faces), 4), dtype=np.uint8)
+                # for i, face in enumerate(mesh.faces):
+                #     # 计算每个面的顶点颜色平均值
+                #     face_vertex_colors = mesh.visual.vertex_colors[face]
+                #     face_colors[i] = np.mean(face_vertex_colors, axis=0).astype(
+                #         np.uint8
+                #     )
+                # vertex_colors = mesh.visual.vertex_colors[mesh.faces]  # 形状: (F, 3, 4)
+                # face_colors = np.mean(vertex_colors, axis=1).astype(
+                #     np.uint8
+                # )  # 形状: (F, 4)
+
+                face_colors = np.mean(
+                    mesh.visual.vertex_colors[mesh.faces], axis=1
+                ).astype(np.uint8)
 
                 # 将计算出的面颜色赋值给mesh.visual.face_colors
                 mesh.visual.face_colors = face_colors
-                print(f"面颜色已计算: 是 (形状: {mesh.visual.face_colors.shape})")
+                # print(f"面颜色已计算: 是 (形状: {mesh.visual.face_colors.shape})")
         else:
             print("无法从材质中提取顶点颜色")
 
     except Exception as e:
         print(f"转换颜色时出错: {e}")
 
-    print("==================\n")
+    # print("==================\n")
 
-def main(glb_path, csv_path,block_size):
+
+def main(glb_path, csv_path, block_size):
     input_path = glb_path
     mesh = tm.load_mesh(input_path)
-
 
     # 从材质应用颜色到顶点和面
     apply_colors_from_material(mesh)
@@ -142,15 +133,35 @@ def main(glb_path, csv_path,block_size):
     # 提取顶点数据
     points = mesh.vertices
 
-    colors = mesh.visual.vertex_colors
+    # colors = mesh.visual.vertex_colors
 
     # 创建点云对象
-    point_cloud = tm.PointCloud(points, colors)
+    # point_cloud = tm.PointCloud(points, colors)
 
+    # point_cloud.export("output_point_cloud.ply", file_type="ply")
 
-    point_cloud.export("output_point_cloud.ply", file_type="ply")
+    # pcd = o3d.io.read_point_cloud("output_point_cloud.ply")
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(points)
 
-    pcd = o3d.io.read_point_cloud("output_point_cloud.ply")
+    # 从顶点颜色中提取RGB通道（去除alpha通道）
+    if (
+        hasattr(mesh, "visual")
+        and mesh.visual is not None
+        and hasattr(mesh.visual, "vertex_colors")
+        and mesh.visual.vertex_colors is not None
+    ):
+        # 提取顶点颜色并归一化
+        colors = mesh.visual.vertex_colors[:, :3].astype(np.float32) / 255.0
+    else:
+        # 默认使用白色作为顶点颜色
+        colors = np.ones((len(points), 3), dtype=np.float64)
+
+    pcd.colors = o3d.utility.Vector3dVector(colors)
+
+    # pcd = o3d.geometry.PointCloud()
+    # pcd.points = o3d.utility.Vector3dVector(points)
+    # pcd.colors = o3d.utility.Vector3dVector(colors[:,:3])  # 去除alpha通道
 
     # block_size = 0.030
 
@@ -173,13 +184,16 @@ def main(glb_path, csv_path,block_size):
     # save_voxel_data(voxel_grid_2, "tmp/output_voxel_grid_2.csv")
     # save_voxel_data(voxel_grid_4, "tmp/output_voxel_grid_4.csv")
 
+
 if __name__ == "__main__":
     if len(sys.argv) != 4:
-        print("Usage: python process.py <input_glb_path> <output_csv_path> <block_size>")
+        print(
+            "Usage: python process.py <input_glb_path> <output_csv_path> <block_size>"
+        )
         sys.exit(1)
 
     glb_path = sys.argv[1]
     csv_path = sys.argv[2]
-    block_size =float(sys.argv[3])
-    main(glb_path, csv_path,block_size)
+    block_size = float(sys.argv[3])
+    main(glb_path, csv_path, block_size)
     print("Done!")
