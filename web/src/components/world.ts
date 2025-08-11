@@ -10,7 +10,8 @@ function loadTexture(path: string): THREE.Texture {
     const texture = textureLoader.load(path);
     // 设置纹理过滤器
     texture.magFilter = THREE.NearestFilter;
-    texture.minFilter = THREE.NearestFilter;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.anisotropy = 16;
     textureCache.set(path, texture);
     return texture;
 }

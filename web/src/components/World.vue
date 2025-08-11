@@ -45,14 +45,18 @@ onMounted(() => {
   const near = 0.1;
   const far = 500;
   const camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
-  camera.position.set(128, 128, 5);
-  camera.lookAt(0, 0, 0);
+  camera.position.set(64, 10, 24);
+  camera.lookAt(32, 0, 0);
 
   const controls = new OrbitControls(camera, canvas.value);
   controls.target.set(0, 0, 0);
   controls.update();
 
-  const renderer = new THREE.WebGLRenderer({ canvas: canvas.value });
+  const renderer = new THREE.WebGLRenderer({
+    canvas: canvas.value,
+    antialias: false,
+    powerPreference: "high-performance"
+  });
 
 
 
