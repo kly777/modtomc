@@ -33,11 +33,13 @@ watch([glbFile, blockSize], async ([newFile, newSize]) => {
 
 const smoothVoxelData = ref<PointData[]>([]);
 
-const radius = ref(1);
+const radius = ref(0.005);
 // 监听 voxelData 的变化，进行平滑处理
 watch([voxelData, radius], ([newData, radius]) => {
   // smoothVoxelData.value = smooth(newData, { radius: radius });
-  smoothVoxelData.value = newData
+  smoothVoxelData.value = newData.filter(voxelData=>{
+    return voxelData.variance>radius
+  })
 })
 
 

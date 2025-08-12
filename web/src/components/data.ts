@@ -1,6 +1,7 @@
 export type PointData = {
   position: position,
   color: RGB
+  variance: number
 }
 
 export type position = {

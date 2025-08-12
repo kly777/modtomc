@@ -6,25 +6,62 @@ import open3d as o3d
 import sys
 
 
-def save_voxel_data(voxel_grid, filename):
-    voxels = voxel_grid.get_voxels()
-    grid_indices = np.array([voxel.grid_index for voxel in voxels])
-    colors = np.array(
-        [
-            voxel.color if hasattr(voxel, "color") else [1.0, 1.0, 1.0]
-            for voxel in voxels
-        ]
-    )
+def save_voxel_data(voxel_grid, digital_voxel_grid, filename):
+    # 获取粗体素和精细体素
+    coarse_voxels = voxel_grid.get_voxels()
+    fine_voxels = digital_voxel_grid.get_voxels()
 
-    # 合并数据
-    data = np.hstack((grid_indices, colors))
+    # 创建精细体素索引映射 (快速查找)
+    fine_voxel_dict = {}
+    for voxel in fine_voxels:
+        # 计算所属的粗体素坐标 (每个粗体素包含4x4x4精细体素)
+        coarse_index = tuple(i // 4 for i in voxel.grid_index)
+        if coarse_index not in fine_voxel_dict:
+            fine_voxel_dict[coarse_index] = []
+        if hasattr(voxel, "color"):
+            fine_voxel_dict[coarse_index].append(voxel.color)
+        else:
+            fine_voxel_dict[coarse_index].append([1.0, 1.0, 1.0])
+
+    # 准备输出数据
+    grid_indices = []
+    colors = []
+    variances = []
+
+    for voxel in coarse_voxels:
+        grid_index = tuple(voxel.grid_index)
+        grid_indices.append(grid_index)
+
+        # 获取粗体素颜色
+        if hasattr(voxel, "color"):
+            colors.append(voxel.color)
+        else:
+            colors.append([1.0, 1.0, 1.0])
+
+        # 计算颜色方差 (使用精细体素)
+        if grid_index in fine_voxel_dict:
+            fine_colors = np.array(fine_voxel_dict[grid_index])
+            # 计算每个通道的方差，然后取平均值
+            channel_variances = np.var(fine_colors, axis=0)
+            variance = np.mean(channel_variances)
+            variances.append(variance)
+        else:
+            variances.append(0.0)  # 没有精细体素时方差为0
+
+    # 转换为NumPy数组
+    grid_indices = np.array(grid_indices)
+    colors = np.array(colors)
+    variances = np.array(variances).reshape(-1, 1)  # 转换为列向量
+
+    # 合并数据: 坐标 + 颜色 + 方差
+    data = np.hstack((grid_indices, colors, variances))
 
     # 使用numpy写入CSV（包含表头）
-    header = "x,y,z,r,g,b"
+    header = "x,y,z,r,g,b,variance"
     np.savetxt(
         filename,
         data,
-        fmt="%.3f",  # 保留6位小数
+        fmt="%.10f",  # 保留6位小数
         delimiter=",",  # 逗号分隔符
         header=header,  # 写入表头
         comments="",  # 避免添加注释符号
@@ -126,7 +163,7 @@ def main(glb_path, csv_path, block_size):
     # 1. 加载网格计时
     start_load = time.time()
     input_path = glb_path
-    mesh = tm.load_mesh(input_path,process=False)
+    mesh = tm.load_mesh(input_path, process=False)
     load_time = time.time() - start_load
 
     # 2. 颜色处理计时
@@ -155,11 +192,14 @@ def main(glb_path, csv_path, block_size):
     voxel_grid_1 = o3d.geometry.VoxelGrid.create_from_point_cloud(
         pcd, voxel_size=block_size
     )
+    voxel_grid_2 = o3d.geometry.VoxelGrid.create_from_point_cloud(
+        pcd, voxel_size=block_size / 4
+    )
     voxel_time = time.time() - start_voxel
 
     # 6. 保存数据计时
     start_save = time.time()
-    save_voxel_data(voxel_grid_1, csv_path)
+    save_voxel_data(voxel_grid_1, voxel_grid_2, csv_path)
     save_time = time.time() - start_save
 
     # 输出各阶段耗时

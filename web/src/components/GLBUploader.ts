@@ -44,7 +44,8 @@ export const voxelizeGLB = async (file: File,blockSize:number): Promise<UploadRe
                 r: parseFloat(row[3]),
                 g: parseFloat(row[4]),
                 b: parseFloat(row[5])
-              }
+              },
+              variance:parseFloat(row[6])
             })
           }
         })
