@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import type { PointData } from './components/data';
 import { voxelizeGLB } from './components/GLBUploader';
 import { findPic } from './findPic';
-import { clusterPoints } from './cluster';
+import { segmentVoxels } from './cluster';
 import { smooth } from './smooth';
 
 const glbFile = ref<File | null>(null);
@@ -35,7 +35,7 @@ const smoothVoxelData = ref<PointData[]>([]);
 
 const radius = ref(1);
 // 监听 voxelData 的变化，进行平滑处理
-watch([voxelData, radius], async ([newData, radius]) => {
+watch([voxelData, radius], ([newData, radius]) => {
   // smoothVoxelData.value = smooth(newData, { radius: radius });
   smoothVoxelData.value = newData
 })
@@ -43,10 +43,13 @@ watch([voxelData, radius], async ([newData, radius]) => {
 
 const clusteredVoxelData = ref<PointData[]>([]);
 
-const k = ref(8);
+const colorThreshold = ref(5);
+const ttt = ref(0); // 用于测试的索引
 // 监听 voxelData 的变化，进行聚类处理
-watch([smoothVoxelData, k], async ([newVoxelData, newEpsilon]) => {
-  clusteredVoxelData.value = clusterPoints(newVoxelData, newEpsilon);
+watch([smoothVoxelData, colorThreshold, ttt], ([newVoxelData, colorThreshold, ttt]) => {
+  clusteredVoxelData.value = segmentVoxels(newVoxelData, { colorThreshold }).sort((a, b) => {
+    return a.length > b.length ? -1 : 1;
+  })[ttt];
 })
 
 
@@ -80,10 +83,23 @@ const clusteredBlocks = computed<BlockData[]>(() => {
 });
 
 const mcBlocks = computed<BlockData[]>(() => {
+  const averageColor = clusteredVoxelData.value.reduce(
+    (acc, voxel) => {
+      acc.r += voxel.color.r;
+      acc.g += voxel.color.g;
+      acc.b += voxel.color.b;
+      return acc;
+    },
+    { r: 0, g: 0, b: 0 }
+  )
+  const averageColor2= { r: averageColor.r / clusteredVoxelData.value.length,
+    g: averageColor.g / clusteredVoxelData.value.length,
+    b: averageColor.b / clusteredVoxelData.value.length
+  }
   return clusteredVoxelData.value.map(voxel => ({
     position: [voxel.position.x, voxel.position.y, voxel.position.z],
     block: new FullBlockWithSamePic(
-      findPic(voxel.color) ? findPic(voxel.color)! : '',
+      findPic(averageColor2) ? findPic(averageColor2)! : '',
     )
   }));
 });
@@ -104,7 +120,10 @@ const mcBlocks = computed<BlockData[]>(() => {
         {{ radius }}
       </div>
       <div id="k">
-        <input type="number" v-model="k" step="1" min="1" />
+        <input type="number" v-model="colorThreshold" step="1" min="1" />
+        {{ colorThreshold }}
+        <input type="number" v-model="ttt" step="1" min="1" />
+        {{ ttt }}
       </div>
     </div>
     <div class="grid">

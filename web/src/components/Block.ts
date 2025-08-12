@@ -60,7 +60,7 @@ export class FullBlock extends Block {
     right: {
       corners: [[1, 0, 1], [1, 0, 0], [1, 1, 1], [1, 1, 0]],
       normal: [1, 0, 0],
-      uv: [[0, 1], [0, 0], [1, 1], [1, 0]],
+      uv: [[0, 0], [1, 0], [0, 1], [1, 1]],
     }
   };
   materials: Record<FullBlockFaces, { type: "color" | "imgPath"; str: string }>

@@ -1,88 +1,134 @@
-import type { PointData } from "./components/data";
-import * as THREE from "three";
-import { DBSCAN } from 'density-clustering';
-import { rgb2lab, lab2rgb } from './color-conversions';
+import type { PointData, position, RGB } from "./components/data";
+import { rgb2lab, lab2rgb } from "./color-conversions";
 
-// 计算欧几里得距离的辅助函数
-function euclideanDistance(a: number[], b: number[]): number {
-  return Math.sqrt(
-    a.reduce((sum, val, i) => sum + Math.pow(val - b[i], 2), 0)
-  );
+
+// 区域增长参数定义
+interface SegmentationParams {
+  colorThreshold?: number; // 颜色差异阈值
+  posThreshold?: number; // 空间位置差异阈值
+  minClusterSize?: number; // 最小簇大小
 }
 
-export function clusterPoints(voxelData: PointData[], epsilon: number = 5, minPoints: number = 5): PointData[] {
-  // 提取颜色样本并转换为Lab颜色空间
-  const labSamples = voxelData.map(v => {
-    const lab = rgb2lab(v.color.r * 255, v.color.g * 255, v.color.b * 255);
-    return [lab.l, lab.a, lab.b];
-  });
+export function segmentVoxels(
+  voxelData: PointData[],
+  params: SegmentationParams = {}
+): PointData[][] {
+  // 设置默认参数值
+  const {
+    colorThreshold = 30,
+    posThreshold = 1.0,  // 默认支持直接邻接（√3）
+    minClusterSize = 3
+  } = params;
 
-  // 使用DBSCAN进行聚类
-  const dbscan = new DBSCAN();
-  const clusters = dbscan.run(labSamples, epsilon, minPoints);
+  // 记录已访问体素
+  const visited: boolean[] = new Array(voxelData.length).fill(false);
+  const clusters: PointData[][] = [];
 
-  // 计算每个聚类的平均颜色和Lab空间质心
-  const clusterColors: THREE.Color[] = [];
-  const clusterCentroidsLab: [number, number, number][] = []; // 每个聚类的Lab质心
+  // 构建空间索引（坐标字符串 -> 体素索引数组）
+  const gridIndex = new Map<string, number[]>();
+  for (let i = 0; i < voxelData.length; i++) {
+    const pos = voxelData[i].position;
+    const key = `${pos.x},${pos.y},${pos.z}`;
+    if (!gridIndex.has(key)) {
+      gridIndex.set(key, []);
+    }
+    gridIndex.get(key)!.push(i);
+  }
 
-  clusters.forEach(cluster => {
-    if (cluster.length === 0) return;
+  // 寻找未访问种子点
+  for (let i = 0; i < voxelData.length; i++) {
+    if (!visited[i]) {
+      console.log(`Starting new cluster from seed ${i}`);
+      const cluster = growRegion(i, voxelData, visited, {
+        colorThreshold,
+        posThreshold
+      }, gridIndex);  // 传入空间索引
 
-    let sumL = 0, sumA = 0, sumB = 0;
-    cluster.forEach(index => {
-      sumL += labSamples[index][0];
-      sumA += labSamples[index][1];
-      sumB += labSamples[index][2];
-    });
-
-    const avgL = sumL / cluster.length;
-    const avgA = sumA / cluster.length;
-    const avgB = sumB / cluster.length;
-
-    // 存储Lab质心
-    clusterCentroidsLab.push([avgL, avgA, avgB]);
-
-    // 转换回RGB并存储颜色
-    const rgb = lab2rgb(avgL, avgA, avgB);
-    clusterColors.push(new THREE.Color(rgb.r / 255, rgb.g / 255, rgb.b / 255));
-  });
-
-  // 应用聚类后的颜色
-  return voxelData.map((voxel, index) => {
-    let clusterId = -1;
-    let minDistance = Infinity;
-
-    // 查找当前点所属的聚类
-    for (let i = 0; i < clusters.length; i++) {
-      if (clusters[i].includes(index)) {
-        clusterId = i;
-        break;
+      // 过滤过小的簇
+      if (cluster.length >= minClusterSize) {
+        clusters.push(cluster);
       }
     }
+  }
 
-    // 如果是噪声点，查找最近的聚类
-    if (clusterId === -1) {
-      const pointLab = labSamples[index];
+  return clusters;
+}
 
-      for (let j = 0; j < clusterCentroidsLab.length; j++) {
-        const centroid = clusterCentroidsLab[j];
-        const distance = euclideanDistance(pointLab, centroid);
+function growRegion(
+  seedIndex: number,
+  voxelData: PointData[],
+  visited: boolean[],
+  params: {
+    colorThreshold: number;
+    posThreshold: number;
+  },
+  gridIndex: Map<string, number[]>  // 新增空间索引参数
+): PointData[] {
+  const { colorThreshold, posThreshold } = params;
+  // 队列存储体素索引（非对象）
+  const queue: number[] = [seedIndex];
+  const cluster: PointData[] = [voxelData[seedIndex]];
+  visited[seedIndex] = true;
 
-        if (distance < minDistance) {
-          minDistance = distance;
-          clusterId = j;
+  // 使用BFS进行区域扩展
+  while (queue.length > 0) {
+    const currentIndex = queue.shift()!;
+    const current = voxelData[currentIndex];
+
+    // 计算搜索范围（整数坐标）
+    const radius = Math.ceil(posThreshold);
+    const xStart = current.position.x - radius;
+    const xEnd = current.position.x + radius;
+    const yStart = current.position.y - radius;
+    const yEnd = current.position.y + radius;
+    const zStart = current.position.z - radius;
+    const zEnd = current.position.z + radius;
+
+    // 遍历周围网格
+    for (let x = xStart; x <= xEnd; x++) {
+      for (let y = yStart; y <= yEnd; y++) {
+        for (let z = zStart; z <= zEnd; z++) {
+          const key = `${x},${y},${z}`;
+          const candidateIndices = gridIndex.get(key) || [];
+          
+          for (const candidateIndex of candidateIndices) {
+            if (!visited[candidateIndex]) {
+              const candidate = voxelData[candidateIndex];
+              // 检查颜色和位置条件
+              if (isColorSimilar(current.color, candidate.color, colorThreshold) &&
+                isPositionClose(current.position, candidate.position, posThreshold)) {
+                visited[candidateIndex] = true;
+                queue.push(candidateIndex);
+                cluster.push(candidate);
+              }
+            }
+          }
         }
       }
-
-      // 如果最小距离超出阈值，保留原始颜色
-      if (minDistance > epsilon * 2) {
-        clusterId = -1;
-      }
     }
+  }
 
-    return {
-      ...voxel,
-      color: clusterId >= 0 ? clusterColors[clusterId] : voxel.color
-    };
-  });
+  return cluster;
 }
+
+function isColorSimilar(c1: RGB, c2: RGB, threshold: number): boolean {
+  const lab1 = rgb2lab(c1.r * 255, c1.g * 255, c1.b * 255);
+  const lab2 = rgb2lab(c2.r * 255, c2.g * 255, c2.b * 255);
+
+  // 计算Lab空间欧氏距离
+  const delta = Math.sqrt(
+    Math.pow(lab1.l - lab2.l, 2) +
+    Math.pow(lab1.a - lab2.a, 2) +
+    Math.pow(lab1.b - lab2.b, 2)
+  );
+
+  return delta < threshold;
+}
+
+function isPositionClose(p1: position, p2: position, threshold: number): boolean {
+  const dx = p1.x - p2.x;
+  const dy = p1.y - p2.y;
+  const dz = p1.z - p2.z;
+  return (dx * dx + dy * dy + dz * dz) <= threshold * threshold; // 直接比较平方值
+}
+
