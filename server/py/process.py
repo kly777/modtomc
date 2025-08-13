@@ -1,4 +1,3 @@
-from multiprocessing import process
 import time
 import numpy as np
 import trimesh as tm
@@ -68,44 +67,6 @@ def save_voxel_data(voxel_grid, digital_voxel_grid, filename):
     )
 
 
-# def check_mesh_colors(mesh):
-#     """检查网格的颜色信息"""
-#     print("=== 网格颜色信息 ===")
-
-#     # 检查是否有顶点颜色
-#     if hasattr(mesh.visual, "vertex_colors") and mesh.visual.vertex_colors is not None:
-#         print(f"顶点颜色: 是 (形状: {mesh.visual.vertex_colors.shape})")
-#         print(f"顶点颜色示例 (前5个): {mesh.visual.vertex_colors[:5]}")
-#     else:
-#         print("顶点颜色: 否")
-
-#     # 检查是否有面颜色
-#     if hasattr(mesh.visual, "face_colors") and mesh.visual.face_colors is not None:
-#         print(f"面颜色: 是 (形状: {mesh.visual.face_colors.shape})")
-#         print(f"面颜色示例 (前5个): {mesh.visual.face_colors[:5]}")
-#     else:
-#         print("面颜色: 否")
-
-#     # 检查是否有材质
-#     if hasattr(mesh.visual, "material"):
-#         print(f"材质: 是 (类型: {type(mesh.visual.material)})")
-#     else:
-#         print("材质: 否")
-
-#     # 检查是否有纹理
-#     if hasattr(mesh.visual, "uv"):
-#         print(
-#             f"纹理坐标: 是 (形状: {mesh.visual.uv.shape if mesh.visual.uv is not None else 'None'})"
-#         )
-#     else:
-#         print("纹理坐标: 否")
-
-#     print("==================\n")
-
-
-# check_mesh_colors(mesh)
-
-
 def apply_colors_from_material(mesh):
     """从材质中提取颜色并应用到顶点和面"""
     # print("=== 从材质应用颜色 ===")
@@ -125,13 +86,6 @@ def apply_colors_from_material(mesh):
 
             # 从顶点颜色计算面颜色（每个面取其顶点颜色的平均值）
             if hasattr(mesh, "faces") and mesh.faces is not None:
-                # face_colors = np.zeros((len(mesh.faces), 4), dtype=np.uint8)
-                # for i, face in enumerate(mesh.faces):
-                #     # 计算每个面的顶点颜色平均值
-                #     face_vertex_colors = mesh.visual.vertex_colors[face]
-                #     face_colors[i] = np.mean(face_vertex_colors, axis=0).astype(
-                #         np.uint8
-                #     )
                 # vertex_colors = mesh.visual.vertex_colors[mesh.faces]  # 形状: (F, 3, 4)
                 # face_colors = np.mean(vertex_colors, axis=1).astype(
                 #     np.uint8
@@ -157,6 +111,59 @@ def apply_colors_from_material(mesh):
     # print("==================\n")
 
 
+def optimize_uv(mesh):
+    """优化UV坐标，解决纹理拉伸问题"""
+    if hasattr(mesh.visual, "uv") and mesh.visual.uv is not None:
+        print("进行UV优化...")
+        # 1. 计算UV坐标的边界
+        uv_min = np.min(mesh.visual.uv, axis=0)
+        uv_max = np.max(mesh.visual.uv, axis=0)
+        uv_range = uv_max - uv_min
+
+        # 2. 避免除零错误
+        if uv_range[0] > 0 and uv_range[1] > 0:
+            # 3. 归一化UV坐标到[0,1]范围
+            mesh.visual.uv = (mesh.visual.uv - uv_min) / uv_range
+        print("UV优化完成")
+    else:
+        print("模型没有UV坐标，跳过UV优化")
+
+
+def optimize_vertex_colors(pcd):
+    """优化点云顶点颜色，解决颜色不均匀问题"""
+    print("进行顶点颜色优化...")
+    # 1. 获取点云数据
+    points = np.asarray(pcd.points)
+    colors = np.asarray(pcd.colors)
+
+    # 2. 创建KDTree用于快速邻域搜索
+    kdtree = o3d.geometry.KDTreeFlann(pcd)
+
+    # 3. 参数设置
+    k = 20  # 邻域点数
+    sigma = 0.1  # 高斯滤波参数
+
+    # 4. 创建新颜色数组
+    new_colors = np.zeros_like(colors)
+
+    # 5. 遍历每个点
+    for i in range(len(points)):
+        # 查找k个最近邻
+        [_, idx, dist] = kdtree.search_knn_vector_3d(pcd.points[i], k)
+
+        # 计算高斯权重
+        weights = np.exp(-(np.array(dist) ** 2) / (2 * sigma**2))
+        weights /= np.sum(weights)  # 归一化权重
+
+        # 计算加权平均颜色
+        weighted_colors = colors[idx] * weights[:, np.newaxis]
+        new_colors[i] = np.sum(weighted_colors, axis=0)
+
+    # 6. 应用优化后的颜色
+    pcd.colors = o3d.utility.Vector3dVector(new_colors)
+    print("顶点颜色优化完成")
+
+
 def main(glb_path, csv_path, block_size):
     start_total = time.time()
 
@@ -166,7 +173,12 @@ def main(glb_path, csv_path, block_size):
     mesh = tm.load_mesh(input_path, process=False)
     load_time = time.time() - start_load
 
-    # 2. 颜色处理计时
+    # UV优化
+    start_uv = time.time()
+    optimize_uv(mesh)
+    uv_time = time.time() - start_uv
+
+    # 2. 将材质颜色应用到顶点
     start_color = time.time()
     apply_colors_from_material(mesh)
     color_time = time.time() - start_color
@@ -176,6 +188,7 @@ def main(glb_path, csv_path, block_size):
     points = mesh.vertices
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(points)
+
     pcd_time = time.time() - start_pcd
 
     # 4. 颜色处理计时
@@ -184,8 +197,14 @@ def main(glb_path, csv_path, block_size):
         colors = mesh.visual.vertex_colors[:, :3].astype(np.float32) / 255.0
     else:
         colors = np.ones((len(points), 3), dtype=np.float32)
+
     pcd.colors = o3d.utility.Vector3dVector(colors)
     color2_time = time.time() - start_color2
+
+    # 点云顶点颜色优化
+    start_vertex_opt = time.time()
+    optimize_vertex_colors(pcd)
+    vertex_opt_time = time.time() - start_vertex_opt
 
     # 5. 体素网格计时
     start_voxel = time.time()
@@ -206,9 +225,11 @@ def main(glb_path, csv_path, block_size):
     total_time = time.time() - start_total
     print("\n=== 执行时间分析 ===")
     print(f"网格加载: {load_time:.2f}s ({load_time / total_time:.1%})")
+    print(f"UV优化: {uv_time:.2f}s ({uv_time / total_time:.1%})")
     print(f"颜色处理: {color_time:.2f}s ({color_time / total_time:.1%})")
     print(f"点云生成: {pcd_time:.2f}s ({pcd_time / total_time:.1%})")
     print(f"颜色应用: {color2_time:.2f}s ({color2_time / total_time:.1%})")
+    print(f"顶点颜色优化: {vertex_opt_time:.2f}s ({vertex_opt_time / total_time:.1%})")
     print(f"体素生成: {voxel_time:.2f}s ({voxel_time / total_time:.1%})")
     print(f"数据保存: {save_time:.2f}s ({save_time / total_time:.1%})")
     print(f"总耗时: {total_time:.2f}s")
