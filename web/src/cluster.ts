@@ -7,6 +7,7 @@ interface SegmentationParams {
   colorThreshold?: number; // 颜色差异阈值
   posThreshold?: number; // 空间位置差异阈值
   minClusterSize?: number; // 最小簇大小
+  varianceThreshold?: number; // 方差阈值
 }
 
 export function segmentVoxels(
@@ -17,7 +18,8 @@ export function segmentVoxels(
   const {
     colorThreshold = 30,
     posThreshold = 1.0,  // 默认支持直接邻接（√3）
-    minClusterSize = 3
+    minClusterSize = 0, // 默认不限制最小簇大小
+    varianceThreshold = 0
   } = params;
 
   // 记录已访问体素
@@ -41,7 +43,8 @@ export function segmentVoxels(
       console.log(`Starting new cluster from seed ${i}`);
       const cluster = growRegion(i, voxelData, visited, {
         colorThreshold,
-        posThreshold
+        posThreshold,
+        varianceThreshold
       }, gridIndex);  // 传入空间索引
 
       // 过滤过小的簇
@@ -61,10 +64,11 @@ function growRegion(
   params: {
     colorThreshold: number;
     posThreshold: number;
+    varianceThreshold?: number;
   },
   gridIndex: Map<string, number[]>  // 新增空间索引参数
 ): PointData[] {
-  const { colorThreshold, posThreshold } = params;
+  const { colorThreshold, posThreshold, varianceThreshold=1 } = params;
   // 队列存储体素索引（非对象）
   const queue: number[] = [seedIndex];
   const cluster: PointData[] = [voxelData[seedIndex]];
@@ -90,13 +94,13 @@ function growRegion(
         for (let z = zStart; z <= zEnd; z++) {
           const key = `${x},${y},${z}`;
           const candidateIndices = gridIndex.get(key) || [];
-          
+
           for (const candidateIndex of candidateIndices) {
             if (!visited[candidateIndex]) {
               const candidate = voxelData[candidateIndex];
               // 检查颜色和位置条件
               if (isColorSimilar(current.color, candidate.color, colorThreshold) &&
-                isPositionClose(current.position, candidate.position, posThreshold)) {
+                isPositionClose(current.position, candidate.position, posThreshold)&&current.variance<=varianceThreshold) {
                 visited[candidateIndex] = true;
                 queue.push(candidateIndex);
                 cluster.push(candidate);
