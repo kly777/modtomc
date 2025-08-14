@@ -139,119 +139,218 @@ const mcBlocks = computed<BlockData[]>(() => {
 </script>
 
 <template>
-  <div class="container">
-    <div class="panel">
-      <h4>导入模型</h4>
-      <GLBImporter v-model="glbFile" />
-      <h4>体素化</h4>
-      <div>
-        <input type="number" v-model="blockSize" step="0.001" min="0.001" max="100" />
-        {{ blockSize }}
+  <div class="app-container">
+
+    <div class="main-layout">
+      <div class="control-panel">
+        <div class="panel-section">
+          <h2>模型处理</h2>
+          <div class="control-group">
+            <h3>导入模型</h3>
+            <GLBImporter v-model="glbFile" />
+          </div>
+
+          <div class="control-group">
+            <h3>体素化设置</h3>
+            <div class="control-item">
+              <label>体素大小:</label>
+              <input type="number" v-model="blockSize" step="0.001" min="0.001" max="100" />
+              <span class="value-display">{{ blockSize }}</span>
+            </div>
+          </div>
+
+          <div class="control-group">
+            <h3>颜色聚类</h3>
+            <div class="control-item">
+              <label>颜色阈值:</label>
+              <input type="number" v-model="colorThreshold" step="1" min="1" />
+              <span class="value-display">{{ colorThreshold }}</span>
+            </div>
+            <div class="control-item">
+              <label>方差阈值:</label>
+              <input type="number" v-model="varianceThreshold" step="0.001" min="0.001" max="100" />
+              <span class="value-display">{{ varianceThreshold }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel-section">
+          <h2>颜色树控制</h2>
+          <div class="control-group">
+            <div class="control-item">
+              <label>自动展开阈值:</label>
+              <input type="number" v-model="autoExpend" step="0.1" min="1" />
+              <span class="value-display">{{ autoExpend }}</span>
+            </div>
+          </div>
+          <div class="tree-control" v-if="colorTree">
+            <ColorTreeNode :node="colorTree" @toggle="toggleNode" />
+          </div>
+        </div>
       </div>
-      <h4>扩张聚类</h4>
-      <div>
-        <input type="number" v-model="varianceThreshold" step="0.001" min="0.001" max="100" />
-        {{ varianceThreshold }}
-      </div>
-      <div>
-        <input type="number" v-model="colorThreshold" step="1" min="1" />
-        {{ colorThreshold }}
-      </div>
-      <h4>颜色树控制</h4>
-      <div class="tree-control" v-if="colorTree">
-        <input type="number" v-model="autoExpend" step="0.1" min="1" />
-        <ColorTreeNode :node="colorTree" @toggle="toggleNode" />
-      </div>
-    </div>
-    <div class="grid">
-      <div class="top-left">
-        <GLBViewer :file="glbFile" :scale="1 / blockSize" />
-      </div>
-      <div class="top-right">
-        <World :blocks="convertedBlocks" />
-      </div>
-      <div class="bottom-left">
-        <World :blocks="clusteredBlocks" />
-      </div>
-      <div class="bottom-right">
-        <World :blocks="mcBlocks" />
+
+      <div class="preview-grid">
+        <div class="preview-item">
+          <h3>原始模型</h3>
+          <GLBViewer :file="glbFile" :scale="1 / blockSize" />
+        </div>
+        <div class="preview-item">
+          <h3>体素化结果</h3>
+          <World :blocks="convertedBlocks" />
+        </div>
+        <div class="preview-item">
+          <h3>颜色聚类</h3>
+          <World :blocks="clusteredBlocks" />
+        </div>
+        <div class="preview-item">
+          <h3>Minecraft材质</h3>
+          <World :blocks="mcBlocks" />
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.container {
+.app-container {
   display: flex;
-  flex-direction: row;
-  height: 100%;
+  flex-direction: column;
+  height: 100vh;
+  background-color: #f8f9fa;
 }
 
-.grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr 1fr;
-  height: 100%;
-  gap: 10px;
-  width: 100%;
-  padding: 20px;
+
+.app-header h1 {
+  margin: 0;
+  font-size: 1.8rem;
 }
 
-.top-left,
-.top-right,
-.bottom-left,
-.bottom-right {
-  background-color: #ffffff;
-  overflow: hidden;
-  position: relative;
-  height: 100%;
+.app-header p {
+  margin: 5px 0 0;
+  opacity: 0.8;
 }
 
-.panel {
-  background-color: #f0f0f0;
-  padding: 20px;
-  box-sizing: border-box;
-  height: 100%;
-}
-
-.container {
+.main-layout {
   display: flex;
-  flex-direction: row;
-  height: 100%;
-}
-
-.grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr 1fr;
-  height: 100%;
-  gap: 10px;
-  width: 100%;
-  padding: 20px;
-}
-
-.top-left,
-.top-right,
-.bottom-left,
-.bottom-right {
-  background-color: #ffffff;
+  flex: 1;
   overflow: hidden;
-  position: relative;
-  height: 100%;
 }
 
-.panel {
-  background-color: #f0f0f0;
+.control-panel {
+  width: 300px;
+  background-color: white;
   padding: 20px;
-  box-sizing: border-box;
-  height: 100%;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 25px;
+}
+
+.panel-section {
+  padding: 15px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+
+.panel-section h2 {
+  margin-top: 0;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e0e0e0;
+  color: #2c3e50;
+}
+
+.control-group {
+  margin-bottom: 20px;
+}
+
+.control-group h3 {
+  margin: 15px 0 10px;
+  font-size: 1.1rem;
+  color: #3498db;
+}
+
+.control-item {
+  display: flex;
+  align-items: center;
+  margin: 10px 0;
+}
+
+.control-item label {
+  width: 100px;
+  font-weight: 500;
+}
+
+.control-item input {
+  flex: 1;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.value-display {
+  width: 60px;
+  text-align: right;
+  margin-left: 10px;
 }
 
 .tree-control {
   max-height: 300px;
   overflow-y: auto;
-  border: 1px solid #ccc;
+  border: 1px solid #ddd;
+  border-radius: 4px;
   padding: 10px;
-  margin-top: 10px;
+  background-color: white;
+}
+
+.preview-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  gap: 15px;
+  padding: 20px;
+  background-color: #f0f2f5;
+}
+
+.preview-item {
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.preview-item h3 {
+  margin: 0;
+  padding: 12px 15px;
+  background-color: #3498db;
+  color: white;
+  font-size: 1.1rem;
+}
+
+.preview-item>div {
+  flex: 1;
+  min-height: 0;
+  /* 修复flex布局问题 */
+}
+
+/* 响应式设计 */
+@media (max-width: 1200px) {
+  .main-layout {
+    flex-direction: column;
+  }
+
+  .control-panel {
+    width: 100%;
+    max-height: 300px;
+  }
+
+  .preview-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: repeat(4, 1fr);
+  }
 }
 </style>
