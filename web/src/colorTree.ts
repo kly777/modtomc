@@ -20,17 +20,22 @@ function getAverageColor(cluster: PointData[]): { r: number, g: number, b: numbe
   };
 }
 
+import { rgb2lab } from './color-conversions';
+
 /**
- * 计算两个颜色之间的欧氏距离
+ * 计算两个颜色之间的Lab空间欧氏距离
  */
 function colorDistance(
   c1: { r: number, g: number, b: number },
   c2: { r: number, g: number, b: number }
 ): number {
+  const lab1 = rgb2lab(c1.r * 255, c1.g * 255, c1.b * 255);
+  const lab2 = rgb2lab(c2.r * 255, c2.g * 255, c2.b * 255);
+
   return Math.sqrt(
-    (c1.r - c2.r) ** 2 +
-    (c1.g - c2.g) ** 2 +
-    (c1.b - c2.b) ** 2
+    Math.pow(lab1.l - lab2.l, 2) +
+    Math.pow(lab1.a - lab2.a, 2) +
+    Math.pow(lab1.b - lab2.b, 2)
   );
 }
 
@@ -45,6 +50,7 @@ export type ColorTree = {
 
 export function getColorTree(
   data: PointData[][],
+  autoExpend: number = 12
 ) {
   let colors: ColorTree[] = [];
 
@@ -64,7 +70,7 @@ export function getColorTree(
 
   let unprocessedColorTree: ColorTree[] = colors
 
-  let tree = buildTree(unprocessedColorTree);
+  let tree = buildTree(unprocessedColorTree, autoExpend);
   return tree;
 }
 
@@ -72,7 +78,7 @@ export function getColorTree(
 /**
  * 递归合并最近的两个颜色节点，构建颜色树
  */
-function buildTree(nodes: ColorTree[]): ColorTree {
+function buildTree(nodes: ColorTree[],autoExpend:number): ColorTree {
   // 当只剩一个节点时终止递归
   if (nodes.length <= 1) {
     return nodes[0] || { color: { r: 0, g: 0, b: 0 }, n: 0, children: [] };
@@ -109,7 +115,7 @@ function buildTree(nodes: ColorTree[]): ColorTree {
     n: nodeA.n + nodeB.n,
     points: [...nodeA.points, ...nodeB.points],
     children: [nodeA, nodeB],
-    expand: minDistance>0.1 // 可以根据颜色距离决定
+    expand: minDistance > autoExpend // 可以根据颜色距离决定
   };
 
   // 从数组中移除旧节点并添加新节点
@@ -118,7 +124,7 @@ function buildTree(nodes: ColorTree[]): ColorTree {
   nodes.push(mergedNode);
 
   // 递归继续合并
-  return buildTree(nodes);
+  return buildTree(nodes, autoExpend);
 }
 
 /**
@@ -137,7 +143,7 @@ export function toggleNodeExpand(tree: ColorTree, targetNode: ColorTree): boolea
     tree.expand = !tree.expand;
     return true;
   }
-  
+
   for (const child of tree.children) {
     if (toggleNodeExpand(child, targetNode)) {
       return true;

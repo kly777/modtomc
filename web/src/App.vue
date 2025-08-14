@@ -101,11 +101,12 @@ const clusteredBlocks = computed<BlockData[]>(() => {
 // 扩张聚类后，使用颜色对组再次聚类
 
 const colorTree = ref<ColorTree | null>(null);
+const autoExpend = ref(12); // 自动展开的阈值
 const kClusteredVoxelData = ref<PointData[]>([]);
 
-watch([clusteredVoxelData], ([newClusteredVoxelData]) => {
+watch([clusteredVoxelData, autoExpend], ([newClusteredVoxelData, autoExpend]) => {
   if (newClusteredVoxelData.length > 0) {
-    colorTree.value = getColorTree(newClusteredVoxelData);
+    colorTree.value = getColorTree(newClusteredVoxelData, autoExpend);
     updateVisiblePoints();
   }
 });
@@ -158,6 +159,7 @@ const mcBlocks = computed<BlockData[]>(() => {
       </div>
       <h4>颜色树控制</h4>
       <div class="tree-control" v-if="colorTree">
+        <input type="number" v-model="autoExpend" step="0.1" min="1" />
         <ColorTreeNode :node="colorTree" @toggle="toggleNode" />
       </div>
     </div>

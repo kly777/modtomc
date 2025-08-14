@@ -118,15 +118,13 @@ function growRegion(
 function isColorSimilar(c1: RGB, c2: RGB, threshold: number): boolean {
   const lab1 = rgb2lab(c1.r * 255, c1.g * 255, c1.b * 255);
   const lab2 = rgb2lab(c2.r * 255, c2.g * 255, c2.b * 255);
-
+  
   // 计算Lab空间欧氏距离
-  const delta = Math.sqrt(
+  return Math.sqrt(
     Math.pow(lab1.l - lab2.l, 2) +
     Math.pow(lab1.a - lab2.a, 2) +
     Math.pow(lab1.b - lab2.b, 2)
-  );
-
-  return delta < threshold;
+  ) < threshold;
 }
 
 function isPositionClose(p1: position, p2: position, threshold: number): boolean {
