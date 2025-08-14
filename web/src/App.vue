@@ -10,7 +10,9 @@ import type { PointData } from './components/data';
 import { voxelizeGLB } from './components/GLBUploader';
 import { findPic } from './findPic';
 import { segmentVoxels } from './cluster';
-import { getColorTree, getPointsAtLevel } from './colorTree';
+import { getColorTree, toggleNodeExpand, getVisiblePoints } from './colorTree';
+import type { ColorTree } from './colorTree';
+import ColorTreeNode from './components/ColorTreeNode.vue';
 
 // ===导入glb模型===
 const glbFile = ref<File | null>(null);
@@ -98,18 +100,28 @@ const clusteredBlocks = computed<BlockData[]>(() => {
 
 // 扩张聚类后，使用颜色对组再次聚类
 
-const kClusteredVoxelData = ref<PointData[]>([])
+const colorTree = ref<ColorTree | null>(null);
+const kClusteredVoxelData = ref<PointData[]>([]);
 
-const level = ref(0) // 初始层级设为0（根节点）
-
-watch([clusteredVoxelData, level], ([newClusteredVoxelData, lv]) => {
+watch([clusteredVoxelData], ([newClusteredVoxelData]) => {
   if (newClusteredVoxelData.length > 0) {
-    let tree = getColorTree(newClusteredVoxelData);
-    kClusteredVoxelData.value = getPointsAtLevel(tree, lv);
+    colorTree.value = getColorTree(newClusteredVoxelData);
+    updateVisiblePoints();
   }
 });
 
+function updateVisiblePoints() {
+  if (colorTree.value) {
+    kClusteredVoxelData.value = getVisiblePoints(colorTree.value);
+  }
+}
 
+function toggleNode(node: ColorTree) {
+  if (colorTree.value) {
+    toggleNodeExpand(colorTree.value, node);
+    updateVisiblePoints();
+  }
+}
 
 // === 颜色匹配材质 ===
 const mcBlocks = computed<BlockData[]>(() => {
@@ -144,10 +156,9 @@ const mcBlocks = computed<BlockData[]>(() => {
         <input type="number" v-model="colorThreshold" step="1" min="1" />
         {{ colorThreshold }}
       </div>
-      <h4>颜色树层级</h4>
-      <div>
-        <input type="number" v-model="level" step="1" min="0" />
-        {{ level }}
+      <h4>颜色树控制</h4>
+      <div class="tree-control" v-if="colorTree">
+        <ColorTreeNode :node="colorTree" @toggle="toggleNode" />
       </div>
     </div>
     <div class="grid">
@@ -199,5 +210,46 @@ const mcBlocks = computed<BlockData[]>(() => {
   padding: 20px;
   box-sizing: border-box;
   height: 100%;
+}
+
+.container {
+  display: flex;
+  flex-direction: row;
+  height: 100%;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  height: 100%;
+  gap: 10px;
+  width: 100%;
+  padding: 20px;
+}
+
+.top-left,
+.top-right,
+.bottom-left,
+.bottom-right {
+  background-color: #ffffff;
+  overflow: hidden;
+  position: relative;
+  height: 100%;
+}
+
+.panel {
+  background-color: #f0f0f0;
+  padding: 20px;
+  box-sizing: border-box;
+  height: 100%;
+}
+
+.tree-control {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid #ccc;
+  padding: 10px;
+  margin-top: 10px;
 }
 </style>

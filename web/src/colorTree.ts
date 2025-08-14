@@ -34,7 +34,7 @@ function colorDistance(
   );
 }
 
-type ColorTree = {
+export type ColorTree = {
   color: RGB;
   n: number;
   points: PointData[];
@@ -109,7 +109,7 @@ function buildTree(nodes: ColorTree[]): ColorTree {
     n: nodeA.n + nodeB.n,
     points: [...nodeA.points, ...nodeB.points],
     children: [nodeA, nodeB],
-    expand: false // 可以根据颜色距离决定
+    expand: minDistance>0.1 // 可以根据颜色距离决定
   };
 
   // 从数组中移除旧节点并添加新节点
@@ -127,22 +127,42 @@ function buildTree(nodes: ColorTree[]): ColorTree {
  * @param targetLevel 目标层级(0表示根节点)
  * @param currentLevel 当前层级(内部递归使用)
  */
-export function getPointsAtLevel(
-  tree: ColorTree,
-  targetLevel: number,
-  currentLevel: number = 0
-): PointData[] {
-  if (currentLevel === targetLevel) {
-    console.log("getPointsAtLevel", tree.points);
-    tree.points.map(point => {
-      point.color = tree.color
-    })
-    return tree.points;
+/**
+ * 切换节点的展开状态
+ * @param tree 颜色树节点
+ * @param targetNode 目标节点（通过引用比较）
+ */
+export function toggleNodeExpand(tree: ColorTree, targetNode: ColorTree): boolean {
+  if (tree === targetNode) {
+    tree.expand = !tree.expand;
+    return true;
   }
-
-  let points: PointData[] = [];
+  
   for (const child of tree.children) {
-    points = points.concat(getPointsAtLevel(child, targetLevel, currentLevel + 1));
+    if (toggleNodeExpand(child, targetNode)) {
+      return true;
+    }
   }
-  return points;
+  return false;
+}
+
+/**
+ * 根据节点展开状态获取所有可见的点
+ * @param tree 颜色树根节点
+ */
+export function getVisiblePoints(tree: ColorTree): PointData[] {
+  // 如果当前节点是展开的，那么我们需要递归子节点（如果存在子节点）
+  if (tree.expand && tree.children.length > 0) {
+    let points: PointData[] = [];
+    tree.children.forEach(child => {
+      points = points.concat(getVisiblePoints(child));
+    });
+    return points;
+  } else {
+    // 如果没有展开，或者没有子节点，则返回当前节点的点
+    return tree.points.map(point => ({
+      ...point,
+      color: tree.color
+    }));
+  }
 }
