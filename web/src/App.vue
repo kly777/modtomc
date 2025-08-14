@@ -10,6 +10,7 @@ import type { PointData } from './components/data';
 import { voxelizeGLB } from './components/GLBUploader';
 import { findPic } from './findPic';
 import { segmentVoxels } from './cluster';
+import { getColorTree, getPointsAtLevel } from './colorTree';
 
 // ===导入glb模型===
 const glbFile = ref<File | null>(null);
@@ -52,7 +53,7 @@ const convertedBlocks = computed<BlockData[]>(() => {
 const clusteredVoxelData = ref<PointData[][]>([]);
 
 const colorThreshold = ref(5);
-const ttt = ref(0); // 用于测试的索引
+
 const varianceThreshold = ref(0.01);
 // 监听 voxelData 的变化，进行聚类处理
 watch([voxelData, colorThreshold, varianceThreshold], ([newVoxelData, colorThreshold, varianceThreshold]) => {
@@ -69,7 +70,7 @@ watch([voxelData, colorThreshold, varianceThreshold], ([newVoxelData, colorThres
 
 const clusteredBlocks = computed<BlockData[]>(() => {
   let blocks: BlockData[] = [];
-  clusteredVoxelData.value.forEach((voxelDatas)=>{
+  clusteredVoxelData.value.forEach((voxelDatas) => {
     const total = voxelDatas.length;
     const sum = voxelDatas.reduce((acc, voxel) => {
       acc.r += voxel.color.r;
@@ -95,18 +96,16 @@ const clusteredBlocks = computed<BlockData[]>(() => {
   return blocks;
 });
 
-// 扩张聚类后，使用k-means再次聚类
+// 扩张聚类后，使用颜色对组再次聚类
+
 const kClusteredVoxelData = ref<PointData[]>([])
 
-const k = ref(5)
+const level = ref(0) // 初始层级设为0（根节点）
 
-watch([clusteredVoxelData, k], ([newClusteredVoxelData, k]) => {
+watch([clusteredVoxelData, level], ([newClusteredVoxelData, lv]) => {
   if (newClusteredVoxelData.length > 0) {
-    // 这里可以调用k-means聚类算法
-    // 例如：kMeans(newClusteredVoxelData, k);
-    // 注意：需要实现kMeans函数
-    console.log(`进行K-means聚类，k=${k}`);
-    // kClusteredVoxelData.value = kMeans(newClusteredVoxelData, k);
+    let tree = getColorTree(newClusteredVoxelData);
+    kClusteredVoxelData.value = getPointsAtLevel(tree, lv);
   }
 });
 
@@ -114,24 +113,11 @@ watch([clusteredVoxelData, k], ([newClusteredVoxelData, k]) => {
 
 // === 颜色匹配材质 ===
 const mcBlocks = computed<BlockData[]>(() => {
-  const averageColor = kClusteredVoxelData.value.reduce(
-    (acc, voxel) => {
-      acc.r += voxel.color.r;
-      acc.g += voxel.color.g;
-      acc.b += voxel.color.b;
-      return acc;
-    },
-    { r: 0, g: 0, b: 0 }
-  )
-  const averageColor2 = {
-    r: averageColor.r / kClusteredVoxelData.value.length,
-    g: averageColor.g / kClusteredVoxelData.value.length,
-    b: averageColor.b / kClusteredVoxelData.value.length
-  }
+
   return kClusteredVoxelData.value.map(voxel => ({
     position: [voxel.position.x, voxel.position.y, voxel.position.z],
     block: new FullBlockWithSamePic(
-      findPic(averageColor2) ? findPic(averageColor2)! : '',
+      findPic(voxel.color) ? findPic(voxel.color)! : '',
     )
   }));
 });
@@ -154,11 +140,14 @@ const mcBlocks = computed<BlockData[]>(() => {
         <input type="number" v-model="varianceThreshold" step="0.001" min="0.001" max="100" />
         {{ varianceThreshold }}
       </div>
-      <div id="k">
+      <div>
         <input type="number" v-model="colorThreshold" step="1" min="1" />
         {{ colorThreshold }}
-        <input type="number" v-model="ttt" step="1" min="0" />
-        {{ ttt }}
+      </div>
+      <h4>颜色树层级</h4>
+      <div>
+        <input type="number" v-model="level" step="1" min="0" />
+        {{ level }}
       </div>
     </div>
     <div class="grid">
