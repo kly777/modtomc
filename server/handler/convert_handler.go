@@ -72,7 +72,43 @@ func ConvertHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		blockSize = 0.03 // 如果解析失败，使用默认值
 	}
-	// 3. 执行Python脚本
+	// 3. 检查并安装UV依赖
+	log.Println("Checking UV installation...")
+
+	// 检查UV是否已安装
+	uvCheckCmd := exec.Command("uv", "--version")
+	uvCheckCmd.Dir = "py"
+	if err := uvCheckCmd.Run(); err != nil {
+		log.Println("UV not found, installing dependencies...")
+
+		// 安装Python依赖
+		uvSyncCmd := exec.Command("python", "-m", "pip", "install", "uv")
+		uvSyncCmd.Dir = "py"
+		uvSyncCmd.Stdout = log.Writer()
+		uvSyncCmd.Stderr = log.Writer()
+
+		if err := uvSyncCmd.Run(); err != nil {
+			http.Error(w, fmt.Sprintf("Failed to install UV: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		// 安装Python包依赖
+		uvInstallCmd := exec.Command("uv", "sync")
+		uvInstallCmd.Dir = "py"
+		uvInstallCmd.Stdout = log.Writer()
+		uvInstallCmd.Stderr = log.Writer()
+
+		if err := uvInstallCmd.Run(); err != nil {
+			http.Error(w, fmt.Sprintf("Failed to install Python dependencies: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		log.Println("UV and dependencies installed successfully")
+	} else {
+		log.Println("UV is already installed")
+	}
+
+	// 4. 执行Python脚本
 	cmd := exec.Command("uv", "run",
 		filepath.Join("process.py"),
 		"../"+glbPath,
@@ -91,7 +127,7 @@ func ConvertHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 4. 返回CSV文件
+	// 5. 返回CSV文件
 	csvFile, err := os.Open(csvPath)
 	if err != nil {
 		http.Error(w, "Error opening output file", http.StatusInternalServerError)
@@ -109,7 +145,7 @@ func ConvertHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 5. 清理临时文件（异步执行）
+	// 6. 清理临时文件（异步执行）
 	go func() {
 		os.Remove(glbPath)
 		// os.Remove(csvPath)
