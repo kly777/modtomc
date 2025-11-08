@@ -29,12 +29,16 @@ export function segmentVoxels(
   // 构建空间索引（坐标字符串 -> 体素索引数组）
   const gridIndex = new Map<string, number[]>();
   for (let i = 0; i < voxelData.length; i++) {
-    const pos = voxelData[i].position;
+    const pos = voxelData[i]?.position;
+    if (!pos) continue;
     const key = `${pos.x},${pos.y},${pos.z}`;
     if (!gridIndex.has(key)) {
       gridIndex.set(key, []);
     }
-    gridIndex.get(key)!.push(i);
+    const indices = gridIndex.get(key);
+    if (indices) {
+      indices.push(i);
+    }
   }
 
   // 寻找未访问种子点
@@ -71,16 +75,22 @@ function growRegion(
   const { colorThreshold, posThreshold, varianceThreshold=1 } = params;
   // 队列存储体素索引（非对象）
   const queue: number[] = [seedIndex];
-  const cluster: PointData[] = [voxelData[seedIndex]];
+  const seedVoxel = voxelData[seedIndex];
+  if (!seedVoxel) return [];
+  
+  const cluster: PointData[] = [seedVoxel];
   visited[seedIndex] = true;
 
   // 使用BFS进行区域扩展
   while (queue.length > 0) {
-    const currentIndex = queue.shift()!;
+    const currentIndex = queue.shift();
+    if (currentIndex === undefined) continue;
+    
     const current = voxelData[currentIndex];
+    if (!current) continue;
 
     // 计算搜索范围（整数坐标）
-    const radius = Math.ceil(posThreshold);
+    const radius = Math.ceil(posThreshold || 1);
     const xStart = current.position.x - radius;
     const xEnd = current.position.x + radius;
     const yStart = current.position.y - radius;
@@ -99,8 +109,10 @@ function growRegion(
             if (!visited[candidateIndex]) {
               const candidate = voxelData[candidateIndex];
               // 检查颜色和位置条件
-              if (isColorSimilar(current.color, candidate.color, colorThreshold) &&
-                isPositionClose(current.position, candidate.position, posThreshold)&&current.variance<=varianceThreshold) {
+              if (candidate &&
+                  isColorSimilar(current.color, candidate.color, colorThreshold || 0.1) &&
+                  isPositionClose(current.position, candidate.position, posThreshold || 1) &&
+                  current.variance <= (varianceThreshold || 1)) {
                 visited[candidateIndex] = true;
                 queue.push(candidateIndex);
                 cluster.push(candidate);

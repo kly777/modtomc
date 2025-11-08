@@ -71,7 +71,7 @@ function updateGeometry(world: MCWorld, scene: THREE.Scene) {
     // 每个面在顶点数组中的起始索引（每个面4个顶点）
     const startVertexIndex = faceIndex * 4;
     // 该面的材质索引
-    const materialIndex = materialIndices[startVertexIndex];
+    const materialIndex = materialIndices[startVertexIndex] || 0;
     groups.push({
       start: faceIndex * 6, // 该面在索引数组中的起始位置
       count: 6, // 6个索引（两个三角形）

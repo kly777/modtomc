@@ -50,7 +50,8 @@ export class MCWorld {
             return null;
         }
         const index = this.computeVoxelIndex(x, y, z);
-        return this.blocks[index];
+        const block = this.blocks[index];
+        return block || null;
     }
 
     setBlock(x: number, y: number, z: number, block: Block) {

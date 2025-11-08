@@ -46,8 +46,6 @@ build-python: $(OUTPUT_DIR)
 	@cp -r $(PYTHON_DIR)/*.py $(OUTPUT_DIR)/py/
 	@cp -r $(PYTHON_DIR)/pyproject.toml $(OUTPUT_DIR)/py/
 	@cp -r $(PYTHON_DIR)/uv.lock $(OUTPUT_DIR)/py/
-	@mkdir -p $(OUTPUT_DIR)/py/model
-	@cp -r $(PYTHON_DIR)/model/* $(OUTPUT_DIR)/py/model/ 2>/dev/null || true
 	@echo "Python scripts copied: $(OUTPUT_DIR)/py/"
 
 # 复制必要的资源文件

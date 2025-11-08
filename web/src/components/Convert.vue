@@ -63,12 +63,14 @@ const handleFileChange = (event: Event) => {
   const target = event.target as HTMLInputElement
   if (target.files && target.files.length > 0) {
     const file = target.files[0]
-    if (file.type !== 'model/gltf-binary' && !file.name.endsWith('.glb')) {
+    if (file && (file.type !== 'model/gltf-binary' && !file.name.endsWith('.glb'))) {
       alert('请选择有效的GLB文件')
       return
     }
-    selectedFile.value = file
-    status.value = `已选择文件: ${file.name}`
+    if (file) {
+      selectedFile.value = file
+      status.value = `已选择文件: ${file.name}`
+    }
   }
 }
 
@@ -110,14 +112,14 @@ const uploadFile = async () => {
           newVoxelData.push({
             position:
             {
-              x: parseInt(row[0]),
-              y: parseInt(row[1]),
-              z: parseInt(row[2]),
+              x: parseInt(row[0] || '0'),
+              y: parseInt(row[1] || '0'),
+              z: parseInt(row[2] || '0'),
             },
             color: {
-              r: parseFloat(row[3]),
-              g: parseFloat(row[4]),
-              b: parseFloat(row[5])
+              r: parseFloat(row[3] || '0'),
+              g: parseFloat(row[4] || '0'),
+              b: parseFloat(row[5] || '0')
             },
             variance: row[6] ? parseFloat(row[6]) : 0
 

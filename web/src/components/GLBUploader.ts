@@ -36,16 +36,16 @@ export const voxelizeGLB = async (file: File,blockSize:number): Promise<UploadRe
           if (row.length >= 6) {
             voxelData.push({
               position: {
-                x: parseInt(row[0]),
-                y: parseInt(row[1]),
-                z: parseInt(row[2])
+                x: parseInt(row[0] || '0'),
+                y: parseInt(row[1] || '0'),
+                z: parseInt(row[2] || '0')
               },
               color: {
-                r: parseFloat(row[3]),
-                g: parseFloat(row[4]),
-                b: parseFloat(row[5])
+                r: parseFloat(row[3] || '0'),
+                g: parseFloat(row[4] || '0'),
+                b: parseFloat(row[5] || '0')
               },
-              variance:parseFloat(row[6])
+              variance: parseFloat(row[6] || '0')
             })
           }
         })

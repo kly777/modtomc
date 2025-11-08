@@ -81,7 +81,11 @@ export function getColorTree(
 function buildTree(nodes: ColorTree[],autoExpend:number): ColorTree {
   // 当只剩一个节点时终止递归
   if (nodes.length <= 1) {
-    return nodes[0] || { color: { r: 0, g: 0, b: 0 }, n: 0, children: [] };
+    const node = nodes[0];
+    if (!node) {
+      return { color: { r: 0, g: 0, b: 0 }, n: 0, points: [], children: [], expand: false };
+    }
+    return node;
   }
 
   // 查找最近的两个颜色节点
@@ -91,7 +95,11 @@ function buildTree(nodes: ColorTree[],autoExpend:number): ColorTree {
 
   for (let i = 0; i < nodes.length; i++) {
     for (let j = i + 1; j < nodes.length; j++) {
-      const distance = colorDistance(nodes[i].color, nodes[j].color);
+      const nodeI = nodes[i];
+      const nodeJ = nodes[j];
+      if (!nodeI || !nodeJ) continue;
+      
+      const distance = colorDistance(nodeI.color, nodeJ.color);
       if (distance < minDistance) {
         minDistance = distance;
         iMin = i;
@@ -101,7 +109,12 @@ function buildTree(nodes: ColorTree[],autoExpend:number): ColorTree {
   }
 
   // 提取最近的两个节点
-  const [nodeA, nodeB] = [nodes[iMin], nodes[jMin]];
+  const nodeA = nodes[iMin];
+  const nodeB = nodes[jMin];
+  
+  if (!nodeA || !nodeB) {
+    return nodes[0] || { color: { r: 0, g: 0, b: 0 }, n: 0, points: [], children: [], expand: false };
+  }
 
   // 创建合并后的父节点
   const mergedColor = {
@@ -113,7 +126,7 @@ function buildTree(nodes: ColorTree[],autoExpend:number): ColorTree {
   const mergedNode: ColorTree = {
     color: mergedColor,
     n: nodeA.n + nodeB.n,
-    points: [...nodeA.points, ...nodeB.points],
+    points: [...(nodeA.points || []), ...(nodeB.points || [])],
     children: [nodeA, nodeB],
     expand: minDistance > autoExpend // 可以根据颜色距离决定
   };
