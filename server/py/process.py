@@ -130,36 +130,40 @@ def optimize_uv(mesh):
 
 
 def optimize_vertex_colors(pcd):
-    """优化点云顶点颜色，解决颜色不均匀问题"""
+    """完全向量化的顶点颜色优化"""
     print("进行顶点颜色优化...")
     # 1. 获取点云数据
     points = np.asarray(pcd.points)
     colors = np.asarray(pcd.colors)
+    n_points = len(points)
 
     # 2. 创建KDTree用于快速邻域搜索
     kdtree = o3d.geometry.KDTreeFlann(pcd)
 
     # 3. 参数设置
     k = 20  # 邻域点数
-    sigma = 0.1  # 高斯滤波参数
+    sigma = 0.2  # 高斯滤波参数
 
-    # 4. 创建新颜色数组
-    new_colors = np.zeros_like(colors)
+    # 4. 批量获取所有点的邻域
+    all_indices = np.zeros((n_points, k), dtype=int)
+    all_distances = np.zeros((n_points, k))
 
-    # 5. 遍历每个点
-    for i in range(len(points)):
-        # 查找k个最近邻
+    for i in range(n_points):
         [_, idx, dist] = kdtree.search_knn_vector_3d(pcd.points[i], k)
+        all_indices[i] = idx
+        all_distances[i] = dist
 
-        # 计算高斯权重
-        weights = np.exp(-(np.array(dist) ** 2) / (2 * sigma**2))
-        weights /= np.sum(weights)  # 归一化权重
+    # 5. 向量化计算权重
+    weights = np.exp(-(all_distances**2) / (2 * sigma**2))
+    weights = weights / np.sum(weights, axis=1, keepdims=True)  # 归一化权重
 
-        # 计算加权平均颜色
-        weighted_colors = colors[idx] * weights[:, np.newaxis]
-        new_colors[i] = np.sum(weighted_colors, axis=0)
+    # 6. 向量化颜色计算
+    # 使用高级索引获取所有邻近点的颜色
+    neighbor_colors = colors[all_indices]  # Shape: (N, k, 3)
+    weighted_colors = neighbor_colors * weights[:, :, np.newaxis]
+    new_colors = np.sum(weighted_colors, axis=1)
 
-    # 6. 应用优化后的颜色
+    # 7. 应用优化后的颜色
     pcd.colors = o3d.utility.Vector3dVector(new_colors)
     print("顶点颜色优化完成")
 
@@ -223,7 +227,7 @@ def main(glb_path, csv_path, block_size):
 
     # 输出各阶段耗时
     total_time = time.time() - start_total
-    print("\n=== 执行时间分析 ===")
+    print("\n执行时间分析:")
     print(f"网格加载: {load_time:.2f}s ({load_time / total_time:.1%})")
     print(f"UV优化: {uv_time:.2f}s ({uv_time / total_time:.1%})")
     print(f"颜色处理: {color_time:.2f}s ({color_time / total_time:.1%})")
@@ -233,7 +237,6 @@ def main(glb_path, csv_path, block_size):
     print(f"体素生成: {voxel_time:.2f}s ({voxel_time / total_time:.1%})")
     print(f"数据保存: {save_time:.2f}s ({save_time / total_time:.1%})")
     print(f"总耗时: {total_time:.2f}s")
-    print("==================\n")
 
 
 if __name__ == "__main__":

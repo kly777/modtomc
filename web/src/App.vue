@@ -192,7 +192,7 @@ const mcBlocks = computed<BlockData[]>(() => {
       <div class="preview-grid">
         <div class="preview-item">
           <h3>原始模型</h3>
-          <GLBViewer :file="glbFile" :scale="1 / blockSize" />
+          <!-- <GLBViewer :file="glbFile" :scale="1 / blockSize" /> -->
         </div>
         <div class="preview-item">
           <h3>体素化结果</h3>
