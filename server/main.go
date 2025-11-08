@@ -25,7 +25,9 @@ func main() {
 	// 设置路由
 	mux := router.SetupRoutes()
 
-	fmt.Println("Server started at :8080")
+	fmt.Println("Server started")
+	fmt.Println("Access: http://localhost:8080")
+
 	err := http.ListenAndServe(":8080", mux)
 	if err != nil {
 		log.Fatal(err)

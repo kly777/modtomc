@@ -31,8 +31,12 @@ func ConvertHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Println("收到请求...")
-	// 限制上传文件大小为100MB
-	r.ParseMultipartForm(100 << 20)
+	// 限制上传文件大小
+	err := r.ParseMultipartForm(1000 << 20)
+	if err != nil {
+		http.Error(w, "Error parsing form data", http.StatusBadRequest)
+		return
+	}
 
 	// 1. 处理文件上传
 	file, handler, err := r.FormFile("file")

@@ -25,6 +25,8 @@ dist-ssr
 
 *.venv
 
+
+example
 in
 out
 .out
