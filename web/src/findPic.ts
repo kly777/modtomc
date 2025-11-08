@@ -70,18 +70,18 @@ type BlockInfo = {
 }
 
 
-type rawBlockInfo = {
-        file_path: string;
-        file_name: string;
-        type: "null" | "side" | "top" | "bottom";
-        full: boolean;
-        avg_r: number;
-        avg_g: number;
-        avg_b: number;
-        var_r: number;
-        var_g: number;
-        var_b: number;
-}
+// type rawBlockInfo = {
+//         file_path: string;
+//         file_name: string;
+//         type: "null" | "side" | "top" | "bottom";
+//         full: boolean;
+//         avg_r: number;
+//         avg_g: number;
+//         avg_b: number;
+//         var_r: number;
+//         var_g: number;
+//         var_b: number;
+// }
 
 // RGB 转 LAB (0-255)
 function rgbToLab(r: number, g: number, b: number): { L: number; a: number; b: number } {

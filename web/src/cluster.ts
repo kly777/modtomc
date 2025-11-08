@@ -1,5 +1,5 @@
 import type { PointData, position, RGB } from "./components/data";
-import { rgb2lab, lab2rgb } from "./color-conversions";
+import { rgb2lab } from "./color-conversions";
 
 
 // 区域增长参数定义

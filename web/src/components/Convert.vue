@@ -118,7 +118,8 @@ const uploadFile = async () => {
               r: parseFloat(row[3]),
               g: parseFloat(row[4]),
               b: parseFloat(row[5])
-            }
+            },
+            variance: row[6] ? parseFloat(row[6]) : 0
 
           });
         }

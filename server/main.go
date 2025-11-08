@@ -26,5 +26,8 @@ func main() {
 	mux := router.SetupRoutes()
 
 	fmt.Println("Server started at :8080")
-	http.ListenAndServe(":8080", mux)
+	err := http.ListenAndServe(":8080", mux)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
