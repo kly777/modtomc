@@ -10,18 +10,13 @@
 
 ## 环境要求
 
-### 后端环境
-- **Go**: 1.24.5 或更高版本
+### 运行环境
 - **Python**: 3.11.x (推荐3.11.0-3.11.9)
-- **UV**: Python包管理器
-
-### 前端环境
-- **Node.js**: 18.x 或更高版本
-- **pnpm**: 包管理器 (推荐)
+- **Windows操作系统** (构建产物为Windows可执行文件)
 
 ## 快速构建和部署
 
-### 使用Makefile构建（推荐）
+### 使用Makefile构建
 
 项目提供了Makefile用于快速构建和部署：
 
@@ -32,18 +27,6 @@ make all
 # 或单独构建
 make build
 
-# 仅构建Go后端
-make build-server
-
-# 仅构建前端
-make build-web
-
-# 仅复制Python脚本
-make build-python
-
-# 开发模式构建（不构建前端）
-make dev-build
-
 # 清理构建目录
 make clean
 
@@ -52,29 +35,28 @@ make help
 ```
 
 构建完成后，所有文件将输出到 `.out` 目录，包含：
-- `modtomc-server.exe` - Go后端可执行文件（同时作为前端服务器）
+
+- `modtomc.exe` - Go后端可执行文件（集成前端服务和自动依赖管理）
 - 前端静态文件（index.html, assets/等）
-- `py/` - Python脚本和依赖
+- `py/` - Python脚本和依赖配置
 - `block_gen/` - 方块生成资源
-- `start-server.bat` - Windows启动脚本
-- `DEPLOYMENT.md` - 部署说明
 
 ### 部署步骤
 
-1. **安装Python 3.11.x** 和 **UV包管理器**
-2. **安装Python依赖**:
-   ```bash
-   cd .out/py
-   uv sync
-   ```
-3. **启动服务器**:
+1. **安装Python 3.11.x**
+2. **直接运行可执行文件**:
+
    ```bash
    cd .out
-   start-server.bat
+   modtomc.exe
    ```
-4. **访问应用**: 打开浏览器访问 `http://localhost:8080`
 
-**注意**: 构建后的Go服务器已经集成了前端服务，可以直接通过端口8080访问完整应用。
+3. **访问应用**: 打开浏览器访问 `http://localhost:8080`
+
+**自动依赖管理**:
+- 首次运行时，Go服务器会自动检查并安装UV包管理器
+- 自动安装Python依赖包
+- 后续运行无需重复安装
 
 ## 手动安装和启动
 

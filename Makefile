@@ -68,16 +68,17 @@ build: build-server build-web build-python copy-resources
 	@echo "=== BUILD COMPLETE ==="
 	@echo "Output directory: $(OUTPUT_DIR)"
 	@echo "Files included:"
-	@echo "  - modtomc-server.exe (Go backend with frontend server)"
+	@echo "  - modtomc.exe (Go backend with frontend server and auto-dependency management)"
 	@echo "  - Frontend static files (index.html, assets/, etc.)"
 	@echo "  - py/ (Python scripts and dependencies)"
 	@echo "  - block_gen/ (Block generation resources)"
 	@echo ""
 	@echo "Deployment steps:"
-	@echo "1. Ensure Python 3.11 and UV are installed"
-	@echo "2. In py directory run: uv sync"
-	@echo "3. Run: modtomc-server.exe"
-	@echo "4. Access: http://localhost:8080"
+	@echo "1. Ensure Python 3.11 is installed"
+	@echo "2. Run: modtomc.exe"
+	@echo "3. Access: http://localhost:8080"
+	@echo ""
+	@echo "Note: First run will automatically install UV and Python dependencies"
 
 # 开发模式构建（不构建前端）
 .PHONY: dev-build
