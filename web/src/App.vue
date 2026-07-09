@@ -10,7 +10,7 @@ import {
 } from "./components/Block";
 import * as THREE from "three";
 import type { PointData } from "./components/data";
-import { voxelizeGLB, computeAutoBlockSize, clusterVoxels, matchBlocks } from "./components/GLBUploader";
+import { voxelizeGLB, computeAutoBlockSize, computeAutoParams, clusterVoxels, matchBlocks } from "./components/GLBUploader";
 import { toggleNodeExpand } from "./colorTree";
 import type { ColorTree } from "./colorTree";
 import ColorTreeNode from "./components/ColorTreeNode.vue";
@@ -50,6 +50,15 @@ async function runVoxelize(file: File, size: number) {
     try {
         const data = await voxelizeGLB(file, size, ctrl.signal);
         voxelData.value = data.voxelData;
+
+        // 自动推断聚类参数
+        if (data.voxelData.length > 0) {
+            const auto = computeAutoParams(data.voxelData);
+            colorThreshold.value = auto.colorThreshold;
+            varianceThreshold.value = auto.varianceThreshold;
+            autoExpend.value = auto.autoExpend;
+            console.log(`自动参数: colorThreshold=${auto.colorThreshold} varianceThreshold=${auto.varianceThreshold} autoExpend=${auto.autoExpend}`);
+        }
     } catch (error: unknown) {
         if (error instanceof DOMException && error.name === 'AbortError') return;
         if (error && typeof error === 'object' && (error as any).code === 'ERR_CANCELED') return;

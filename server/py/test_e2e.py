@@ -8,6 +8,10 @@ import json
 import csv
 from pathlib import Path
 
+# Fix Windows encoding
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding="utf-8")
+
 # 确保能找到模块
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -201,6 +205,52 @@ def test_frontend_logic(rows, labels, clusters, tree):
     print("  ✓ 所有前端逻辑测试通过")
 
 
+# ── Test 6: 自动参数推断 ─────────────────────────────
+def test_auto_params(rows):
+    print("\nTest 6: 自动参数 computeAutoParams 模拟 ...")
+    # 模拟前端 computeAutoParams
+    def rgb2lab(r, g, b):
+        r, g, b = r / 255, g / 255, b / 255
+        r = ((r + 0.055) / 1.055) ** 2.4 if r > 0.04045 else r / 12.92
+        g = ((g + 0.055) / 1.055) ** 2.4 if g > 0.04045 else g / 12.92
+        b = ((b + 0.055) / 1.055) ** 2.4 if b > 0.04045 else b / 12.92
+        x = (r * 0.4124 + g * 0.3576 + b * 0.1805) / 0.95047
+        y = (r * 0.2126 + g * 0.7152 + b * 0.0722) / 1.0
+        z = (r * 0.0193 + g * 0.1192 + b * 0.9505) / 1.08883
+        fx = x ** (1 / 3) if x > 0.008856 else 7.787 * x + 16 / 116
+        fy = y ** (1 / 3) if y > 0.008856 else 7.787 * y + 16 / 116
+        fz = z ** (1 / 3) if z > 0.008856 else 7.787 * z + 16 / 116
+        return 116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)
+
+    # 取样 + 网格索引
+    sample_rows = rows[:2000]
+    grid = {}
+    for i, row in enumerate(sample_rows):
+        grid[(int(float(row["x"])), int(float(row["y"])), int(float(row["z"])))] = i
+
+    lab_dists = []
+    variances = []
+    for i, row in enumerate(sample_rows):
+        variances.append(float(row["variance"]))
+        lx, la, lb = rgb2lab(float(row["r"]) * 255, float(row["g"]) * 255, float(row["b"]) * 255)
+        x, y, z = int(float(row["x"])), int(float(row["y"])), int(float(row["z"]))
+        for dx, dy, dz in [(1, 0, 0), (0, 1, 0), (0, 0, 1)]:
+            j = grid.get((x + dx, y + dy, z + dz))
+            if j is not None and j > i:
+                q = sample_rows[j]
+                qlx, qla, qlb = rgb2lab(float(q["r"]) * 255, float(q["g"]) * 255, float(q["b"]) * 255)
+                lab_dists.append(((lx - qlx) ** 2 + (la - qla) ** 2 + (lb - qlb) ** 2) ** 0.5)
+
+    lab_dists.sort()
+    variances.sort()
+    p75 = lab_dists[len(lab_dists) * 3 // 4] if lab_dists else 5
+    p90_v = variances[len(variances) * 9 // 10] if variances else 0.01
+    print(f"  Lab 距离 P50={lab_dists[len(lab_dists)//2]:.2f} P75={p75:.2f} P90={lab_dists[len(lab_dists)*9//10]:.2f}")
+    print(f"  Variance P50={variances[len(variances)//2]:.4f} P90={p90_v:.4f}")
+    print(f"  推荐参数: colorThreshold={max(1, round(p75))} varianceThreshold={max(0.001, round(p90_v*1000)/1000):.3f} autoExpend={max(2, round(p75*3))}")
+    print("  ✓ 自动参数计算完成")
+
+
 # ── 主流程 ───────────────────────────────────────────
 if __name__ == "__main__":
     print("=" * 60)
@@ -213,6 +263,10 @@ if __name__ == "__main__":
         tree = test_color_tree(clusters)
         paths = test_match(rows)
         test_frontend_logic(points, labels, clusters, tree)
+
+        # 额外：验证自动参数（基于原始 rows 更好）
+        print("\n" + "=" * 60)
+        test_auto_params(rows)
 
         print("\n" + "=" * 60)
         print("✓ 全部通过")

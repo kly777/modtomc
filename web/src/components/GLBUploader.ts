@@ -61,6 +61,73 @@ export function computeAutoBlockSize(file: File): Promise<number> {
 
 
 /**
+ * 从体素数据自动推断合适的聚类参数。
+ * 基于相邻体素 Lab 颜色距离的中位数和方差分布。
+ */
+export function computeAutoParams(points: PointData[]): {
+  colorThreshold: number
+  varianceThreshold: number
+  autoExpend: number
+} {
+  const sample = points.length > 2000 ? points.slice(0, 2000) : points;
+  const n = sample.length;
+
+  // 构建坐标索引
+  const grid = new Map<string, number>();
+  for (let i = 0; i < n; i++) {
+    const p = sample[i]!;
+    grid.set(`${p.position.x},${p.position.y},${p.position.z}`, i);
+  }
+
+  // 收集相邻体素之间的 Lab 距离
+  const labDistances: number[] = [];
+  const variances: number[] = [];
+  const dirs = [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
+
+  for (let i = 0; i < n; i++) {
+    const p = sample[i]!;
+    variances.push(p.variance);
+    const [lx, la, lb] = rgb2labRaw(p.color.r * 255, p.color.g * 255, p.color.b * 255);
+
+    for (const dir of dirs) {
+      const [dx, dy, dz] = dir as [number, number, number];
+      const k = `${p.position.x + dx},${p.position.y + dy},${p.position.z + dz}`;
+      const j = grid.get(k);
+      if (j !== undefined && j > i) {
+        const q = sample[j]!;
+        const [qlx, qla, qlb] = rgb2labRaw(q.color.r * 255, q.color.g * 255, q.color.b * 255);
+        labDistances.push(Math.sqrt((lx - qlx) ** 2 + (la - qla) ** 2 + (lb - qlb) ** 2));
+      }
+    }
+  }
+
+  if (labDistances.length === 0) {
+    return { colorThreshold: 5, varianceThreshold: 0.01, autoExpend: 12 };
+  }
+
+  // 排序取分位数
+  labDistances.sort((a, b) => a - b);
+  variances.sort((a, b) => a - b);
+
+  const p75 = labDistances[Math.floor(labDistances.length * 0.75)] ?? 5;
+  const p90 = variances[Math.floor(variances.length * 0.9)] ?? 0.01;
+
+  return {
+    colorThreshold: Math.max(1, Math.round(p75)),
+    varianceThreshold: Math.max(0.001, Math.round(p90 * 1000) / 1000),
+    autoExpend: Math.max(2, Math.round(p75 * 3)),
+  };
+}
+
+// 简化的 rgb→lab (复用已有转换)
+import { rgb2lab } from '../color-conversions';
+function rgb2labRaw(r: number, g: number, b: number): [number, number, number] {
+  const lab = rgb2lab(r, g, b);
+  return [lab.l, lab.a, lab.b];
+}
+
+
+/**
  * 调用后端聚类 API，返回簇标签和颜色树。
  * 等价比前端 segmentVoxels() + getColorTree()。
  */
