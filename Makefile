@@ -1,18 +1,15 @@
 # ModToMC 构建脚本
-# 构建Go后端、前端静态文件和Python脚本到.out目录
+# 构建前端静态文件和 Python 后端到 .out 目录
 
-# 配置变量
 OUTPUT_DIR := .out
+WEB_DIR    := web
 SERVER_DIR := server
-WEB_DIR := web
-PYTHON_DIR := $(SERVER_DIR)/py
-BUILD_DIR := $(OUTPUT_DIR)/build
+PY_DIR     := $(SERVER_DIR)/py
 
-# 默认目标
 .PHONY: all
 all: clean build
 
-# 清理构建目录
+# ── 清理 ──────────────────────────────────────────────
 .PHONY: clean
 clean:
 	@echo "Cleaning build directory..."
@@ -22,90 +19,76 @@ clean:
 $(OUTPUT_DIR):
 	@mkdir -p $(OUTPUT_DIR)
 
-# 构建Go后端可执行文件
-.PHONY: build-server
-build-server: $(OUTPUT_DIR)
-	@echo "Building Go backend executable..."
-	@cd $(SERVER_DIR) && go build -o ../$(OUTPUT_DIR)/modtomc.exe main.go
-	@echo "Go backend built: $(OUTPUT_DIR)/modtomc.exe"
-
-# 构建前端静态文件
+# ── 前端构建 ──────────────────────────────────────────
 .PHONY: build-web
 build-web: $(OUTPUT_DIR)
-	@echo "Building frontend static files..."
+	@echo "Building frontend..."
 	@cd $(WEB_DIR) && pnpm install && pnpm build
-	@mkdir -p $(OUTPUT_DIR)
 	@cp -r $(WEB_DIR)/dist/* $(OUTPUT_DIR)/
-	@echo "Frontend built: $(OUTPUT_DIR)/"
+	@echo "Frontend built → $(OUTPUT_DIR)/"
 
-# 复制Python脚本和依赖
+# ── Python 后端 ───────────────────────────────────────
 .PHONY: build-python
 build-python: $(OUTPUT_DIR)
-	@echo "Copying Python scripts and dependencies..."
+	@echo "Preparing Python backend..."
 	@mkdir -p $(OUTPUT_DIR)/py
-	@cp -r $(PYTHON_DIR)/*.py $(OUTPUT_DIR)/py/
-	@cp -r $(PYTHON_DIR)/pyproject.toml $(OUTPUT_DIR)/py/
-	@cp -r $(PYTHON_DIR)/uv.lock $(OUTPUT_DIR)/py/
-	@echo "Python scripts copied: $(OUTPUT_DIR)/py/"
+	@cp $(PY_DIR)/*.py $(OUTPUT_DIR)/py/ 2>/dev/null || true
+	@cp $(PY_DIR)/pyproject.toml $(OUTPUT_DIR)/py/
+	@cp $(PY_DIR)/uv.lock $(OUTPUT_DIR)/py/
+	@echo "Installing Python dependencies..."
+	@cd $(OUTPUT_DIR)/py && uv sync
+	@echo "Python backend ready → $(OUTPUT_DIR)/py/"
 
-# 复制必要的资源文件
+# ── 资源文件 ──────────────────────────────────────────
 .PHONY: copy-resources
 copy-resources: $(OUTPUT_DIR)
-	@echo "Copying resource files..."
+	@echo "Copying resources..."
 	@mkdir -p $(OUTPUT_DIR)/block_gen
-	@cp -r $(SERVER_DIR)/block_gen/*.png $(OUTPUT_DIR)/block_gen/ 2>/dev/null || true
-	@cp -r $(SERVER_DIR)/block_gen/data.json $(OUTPUT_DIR)/block_gen/ 2>/dev/null || true
-	@echo "Resource files copied"
+	@cp $(SERVER_DIR)/block_gen/*.png $(OUTPUT_DIR)/block_gen/ 2>/dev/null || true
+	@cp $(SERVER_DIR)/block_gen/data.json $(OUTPUT_DIR)/block_gen/ 2>/dev/null || true
 
-
-
-# 完整构建
+# ── 完整构建 ──────────────────────────────────────────
 .PHONY: build
-build: build-server build-web build-python copy-resources
+build: build-web build-python copy-resources
 	@echo ""
-	@echo "=== BUILD COMPLETE ==="
-	@echo "Output directory: $(OUTPUT_DIR)"
-	@echo "Files included:"
-	@echo "  - modtomc.exe (Go backend with frontend server and auto-dependency management)"
-	@echo "  - Frontend static files (index.html, assets/, etc.)"
-	@echo "  - py/ (Python scripts and dependencies)"
-	@echo "  - block_gen/ (Block generation resources)"
+	@echo "=============================="
+	@echo "  BUILD COMPLETE"
+	@echo "=============================="
+	@echo "Output: $(OUTPUT_DIR)/"
 	@echo ""
-	@echo "Deployment steps:"
-	@echo "1. Ensure Python 3.11 is installed"
-	@echo "2. Run: modtomc.exe"
-	@echo "3. Access: http://localhost:8080"
+	@echo "To run:"
+	@echo "  make run"
+	@echo "  or: cd $(OUTPUT_DIR)/py && uv run uvicorn main:app --host 0.0.0.0 --port 8080"
 	@echo ""
-	@echo "Note: First run will automatically install UV and Python dependencies"
 
-# 开发模式构建（不构建前端）
+# ── 开发模式 ──────────────────────────────────────────
 .PHONY: dev-build
-dev-build: build-server build-python copy-resources
-	@echo "开发模式构建完成"
-	@echo "前端开发服务器需要单独启动: cd web && pnpm dev"
+dev-build: build-python copy-resources
+	@echo "Dev build done."
+	@echo "Start frontend separately: cd $(WEB_DIR) && pnpm dev"
 
-# 快速构建（仅后端）
-.PHONY: quick-build
-quick-build: build-server
-	@echo "快速构建完成（仅后端）"
+# ── 运行 ──────────────────────────────────────────────
+.PHONY: run
+run:
+	@echo "Starting ModToMC server..."
+	@cd $(OUTPUT_DIR)/py && uv run uvicorn main:app --host 0.0.0.0 --port 8080
 
-# 帮助信息
+.PHONY: dev
+dev:
+	@echo "Starting dev server (with auto-reload)..."
+	@cd $(PY_DIR) && uv run uvicorn main:app --reload --host 0.0.0.0 --port 8080
+
+# ── 帮助 ──────────────────────────────────────────────
 .PHONY: help
 help:
-	@echo "ModToMC 构建脚本"
+	@echo "ModToMC 构建 & 运行"
 	@echo ""
-	@echo "可用目标:"
-	@echo "  all          - 清理并完整构建"
-	@echo "  build        - 完整构建（后端+前端+Python）"
-	@echo "  build-server - 仅构建Go后端"
-	@echo "  build-web    - 仅构建前端静态文件"
-	@echo "  build-python - 仅复制Python脚本"
-	@echo "  dev-build    - 开发模式构建（不构建前端）"
-	@echo "  quick-build  - 快速构建（仅后端）"
-	@echo "  clean        - 清理构建目录"
-	@echo "  help         - 显示此帮助信息"
+	@echo "  make all         清理 + 完整构建"
+	@echo "  make build       完整构建 (.out/)"
+	@echo "  make build-web   仅构建前端"
+	@echo "  make build-python 仅准备 Python 后端"
+	@echo "  make dev-build   开发模式构建（不构建前端）"
+	@echo "  make clean       清理 .out/"
 	@echo ""
-	@echo "使用示例:"
-	@echo "  make all     # 完整构建"
-	@echo "  make build   # 完整构建"
-	@echo "  make clean   # 清理"
+	@echo "  make run         从 .out/ 启动生产服务器"
+	@echo "  make dev         开发模式启动（自动重载）"
