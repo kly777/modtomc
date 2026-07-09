@@ -6,7 +6,7 @@ import GLBViewer from "./components/GLBViewer.vue";
 import type { BlockData } from "./components/world";
 import {
     FullBlockWithPureColor,
-    FullBlockWithSamePic,
+    FullBlockWithPicPath,
 } from "./components/Block";
 import * as THREE from "three";
 import type { PointData } from "./components/data";
@@ -14,6 +14,7 @@ import { voxelizeGLB, computeAutoBlockSize, computeAutoParams, clusterVoxels, ma
 import { toggleNodeExpand } from "./colorTree";
 import type { ColorTree } from "./colorTree";
 import ColorTreeNode from "./components/ColorTreeNode.vue";
+import { logger } from "./logger";
 
 // === 步骤导航 ===
 const currentStep = ref(1);
@@ -302,10 +303,42 @@ watch(kClusteredVoxelData, (points) => {
             const colors = points.map((p) => ({ r: p.color.r, g: p.color.g, b: p.color.b }));
             const paths = await matchBlocks(colors, ctrl.signal);
             if (seq !== matchSeq) return;
-            mcBlocks.value = points.map((voxel, i) => ({
-                position: [voxel.position.x, voxel.position.y, voxel.position.z] as [number, number, number],
-                block: new FullBlockWithSamePic(paths[i] || ""),
-            }));
+
+            // 预加载所有纹理到浏览器缓存，避免渲染时出现黑色
+            const uniquePaths = new Set<string>();
+            paths.forEach(p => {
+                if (p.top) uniquePaths.add(p.top);
+                if (p.side) uniquePaths.add(p.side);
+                if (p.bottom) uniquePaths.add(p.bottom);
+                if (p.all) uniquePaths.add(p.all);
+            });
+            logger.info(`preloading ${uniquePaths.size} unique textures...`);
+            await Promise.all([...uniquePaths].map(src => new Promise<void>(resolve => {
+                const img = new Image();
+                img.onload = () => resolve();
+                img.onerror = () => resolve();  // 失败也继续
+                img.src = src;
+            })));
+            logger.info(`texture preload complete`);
+
+            mcBlocks.value = points.map((voxel, i) => {
+                const face = paths[i]!;
+                const top = face.top || face.all;
+                const side = face.side || face.all;
+                const bottom = face.bottom || face.all;
+                return {
+                    position: [voxel.position.x, voxel.position.y, voxel.position.z] as [number, number, number],
+                    block: new FullBlockWithPicPath({
+                        top,
+                        bottom,
+                        front: side,
+                        back: side,
+                        left: side,
+                        right: side,
+                    }),
+                };
+            });
+            logger.info(`mcBlocks populated: ${mcBlocks.value.length} blocks, sample tex: ${paths[0]?.side || paths[0]?.all}`);
         } catch (e: unknown) {
             if (e instanceof DOMException && e.name === 'AbortError') return;
             if (e && typeof e === 'object' && (e as any).code === 'ERR_CANCELED') return;
@@ -314,7 +347,7 @@ watch(kClusteredVoxelData, (points) => {
             if (matchAbort === ctrl) { matchLoading.value = false; matchAbort = null; }
         }
     })();
-});
+}, { immediate: true });
 
 // 颜色树预览（纯色方块，不用 MC 贴图）
 const colorTreeBlocks = computed<BlockData[]>(() => {

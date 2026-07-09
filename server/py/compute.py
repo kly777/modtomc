@@ -45,10 +45,11 @@ def _lab_dist_batch(lab1: np.ndarray, lab2: np.ndarray) -> np.ndarray:
 
 # ── 方块库加载 ────────────────────────────────────────
 
-_blocks_cache = None
+_blocks_cache: dict | None = None  # {block_name: {top, bottom, side, null, lab, std_sum}}
 
 
-def _load_block_library() -> list[dict]:
+def _load_block_library() -> dict:
+    """加载方块库，按名分组，每块有 top/bottom/side/null 纹理和代表色"""
     global _blocks_cache
     if _blocks_cache is not None:
         return _blocks_cache
@@ -62,20 +63,53 @@ def _load_block_library() -> list[dict]:
     with open(path) as f:
         raw = json.load(f)
 
-    blocks = []
+    # 分组: block_name → {type: {file_path, lab, std_sum}}
+    groups: dict[str, dict] = {}
     for b in raw:
-        if b.get("type") != "null" or not b.get("full"):
+        if not b.get("full"):
             continue
+        fp = b["file_path"]
+        bt = b.get("type", "null")
+        stem = Path(fp).stem
+
+        # 提取方块名: 去掉 _top/_side/_bottom 后缀
+        for suffix in ["_top", "_bottom", "_side"]:
+            if stem.endswith(suffix):
+                stem = stem[: -len(suffix)]
+                break
+
         std_sum = np.sqrt(b.get("var_r", 0) + b.get("var_g", 0) + b.get("var_b", 0))
         if std_sum > 30:
             continue
         lab = _rgb_to_lab(np.array([[b["avg_r"], b["avg_g"], b["avg_b"]]]))[0]
-        blocks.append(
-            {"file_path": b["file_path"], "lab": lab, "std_sum": std_sum}
-        )
 
-    _blocks_cache = blocks
-    logger.info(f"Loaded {len(blocks)} Minecraft blocks for matching")
+        if stem not in groups:
+            groups[stem] = {
+                "name": stem,
+                "top": None, "bottom": None, "side": None, "null": None,
+            }
+        g = groups[stem]
+        g[bt] = {"file_path": fp, "lab": lab, "std_sum": std_sum}
+
+    # 为每个方块计算代表色（优先 null，否则 side，否则 average）
+    result = {}
+    for name, g in groups.items():
+        entries = [g[k] for k in ["null", "side", "top", "bottom"] if g[k]]
+        if not entries:
+            continue
+        rep = g.get("null") or g.get("side") or entries[0]
+        result[name] = {
+            "name": name,
+            "top": g.get("top"),
+            "bottom": g.get("bottom"),
+            "side": g.get("side"),
+            "null": g.get("null"),
+            "lab": rep["lab"],
+            "std_sum": rep["std_sum"],
+        }
+
+    _blocks_cache = result
+    logger.info(f"Loaded {len(result)} MC blocks ({sum(1 for b in result.values() if b['top'])} with top/bottom/side)")
     return _blocks_cache
 
 
@@ -349,19 +383,23 @@ def build_color_tree(
 
 def match_minecraft_blocks(
     colors: list[dict],
-) -> list[str]:
+) -> list[dict]:
     """
-    为每个颜色匹配最近的 Minecraft 方块。
+    为每个颜色匹配最近的 Minecraft 方块，返回分面纹理。
 
     Args:
         colors: [{r, g, b}, ...]  (0-1 范围)
 
     Returns:
-        file_paths: 对应的方块贴图路径列表
+        [{top, bottom, side, null}, ...]  每个面独立纹理路径
     """
-    blocks = _load_block_library()
-    if not colors or not blocks:
+    block_dict = _load_block_library()  # {name: {top,bottom,side,null,lab,std_sum}}
+    if not colors or not block_dict:
         return []
+
+    block_names = list(block_dict.keys())
+    block_lab = np.array([block_dict[n]["lab"] for n in block_names])  # (N, 3)
+    block_std = np.array([block_dict[n]["std_sum"] for n in block_names])  # (N,)
 
     rgb_arr = np.array(
         [[c["r"] * 255, c["g"] * 255, c["b"] * 255] for c in colors],
@@ -369,19 +407,22 @@ def match_minecraft_blocks(
     )
     query_lab = _rgb_to_lab(rgb_arr)  # (M, 3)
 
-    block_lab = np.array([b["lab"] for b in blocks])  # (N, 3)
-    block_std = np.array([b["std_sum"] for b in blocks])  # (N,)
-
-    # 向量化：计算所有查询颜色到所有方块的 Lab 距离
-    # (M, 1, 3) - (1, N, 3) → (M, N, 3) → sum → (M, N)
     diff = query_lab[:, np.newaxis, :] - block_lab[np.newaxis, :, :]
-    dist = np.sqrt(np.sum(diff**2, axis=-1))  # (M, N)
+    dist = np.sqrt(np.sum(diff**2, axis=-1)) + 0.3 * block_std[np.newaxis, :]
 
-    # 加入 std 惩罚 (与前端 findPic.ts 一致)
-    dist = dist + 0.3 * block_std[np.newaxis, :]
+    best_idx = np.argmin(dist, axis=1)
 
-    # 找每个查询颜色的最佳匹配
-    best_idx = np.argmin(dist, axis=1)  # (M,)
-    file_paths = [blocks[i]["file_path"] for i in best_idx]
+    result = []
+    for idx in best_idx:
+        blk = block_dict[block_names[idx]]
+        # 构建每个面的纹理路径（统一用正斜杠，浏览器 URL 只认 /）
+        null_path = blk["null"]["file_path"].replace("\\", "/") if blk["null"] else None
+        face_textures = {
+            "top": blk["top"]["file_path"].replace("\\", "/") if blk["top"] else (null_path or ""),
+            "bottom": blk["bottom"]["file_path"].replace("\\", "/") if blk["bottom"] else (null_path or ""),
+            "side": blk["side"]["file_path"].replace("\\", "/") if blk["side"] else (null_path or ""),
+            "all": null_path or "",  # fallback for uniform blocks
+        }
+        result.append(face_textures)
 
-    return file_paths
+    return result

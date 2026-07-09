@@ -15,12 +15,13 @@ from pathlib import Path
 if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8")
 
+from logger import setup_logging, log_frontend
+
+logger = setup_logging()
+
 from fastapi import FastAPI, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
-
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
-logger = logging.getLogger(__name__)
 
 # ── 路径解析 ──────────────────────────────────────────
 # __file__ = server/py/main.py  →  BASE = server/
@@ -149,13 +150,25 @@ class MatchRequest(BaseModel):
 @app.post("/api/match")
 async def api_match(req: MatchRequest):
     """
-    为每个颜色匹配最近的 Minecraft 方块贴图。
-    等价比前端 findPic()。
+    为每个颜色匹配最近的 Minecraft 方块，返回分面纹理。
+    返回格式: {blocks: [{top, bottom, side, all}, ...]}
     """
     from compute import match_minecraft_blocks
 
-    file_paths = match_minecraft_blocks(req.colors)
-    return {"blocks": file_paths}
+    face_textures = match_minecraft_blocks(req.colors)
+    return {"blocks": face_textures}
+
+
+class LogEntry(BaseModel):
+    level: str = "INFO"
+    message: str
+
+
+@app.post("/api/log")
+async def api_log(entry: LogEntry):
+    """接收前端日志，写入 ./log/frontend.log"""
+    log_frontend(entry.level, entry.message)
+    return {"ok": True}
 
 
 # ── 静态文件服务 ───────────────────────────────────────

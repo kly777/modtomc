@@ -113,12 +113,14 @@ def test_match(rows):
     for row in rows[:50]:
         colors.append({"r": float(row["r"]), "g": float(row["g"]), "b": float(row["b"])})
 
-    paths = match_minecraft_blocks(colors)
-    print(f"  ✓ 返回 {len(paths)} 个匹配")
-    assert len(paths) == len(colors), "Count mismatch"
-    assert all(isinstance(p, str) and p for p in paths), "Empty/invalid path"
-    print(f"  样例: {paths[:3]}")
-    return paths
+    face_textures = match_minecraft_blocks(colors)
+    print(f"  ✓ 返回 {len(face_textures)} 个方块匹配")
+    assert len(face_textures) == len(colors), "Count mismatch"
+    sample = face_textures[0]
+    print(f"  样例: top={sample['top'][:50]}...")
+    has_faces = any(b["top"] != b["side"] for b in face_textures)
+    print(f"  分面方块: {'✓' if has_faces else '(none in this sample)'}")
+    return face_textures
 
 
 # ── Test 5: 前端逻辑模拟 ─────────────────────────────
@@ -264,7 +266,7 @@ if __name__ == "__main__":
         rows = test_voxelize()
         points, labels, clusters = test_cluster(rows)
         tree = test_color_tree(clusters)
-        paths = test_match(rows)
+        face_textures = test_match(rows)
         test_frontend_logic(points, labels, clusters, tree)
 
         # 额外：验证自动参数（基于原始 rows 更好）

@@ -3,18 +3,19 @@ import { type Position, Block } from "./Block";
 
 
 const textureCache = new Map<string, THREE.Texture>();
-
 const textureLoader = new THREE.TextureLoader();
+
 function loadTexture(path: string): THREE.Texture {
     if (textureCache.has(path)) return textureCache.get(path)!;
     const texture = textureLoader.load(path);
-    // 设置纹理过滤器
     texture.magFilter = THREE.NearestFilter;
     texture.minFilter = THREE.LinearMipmapLinearFilter;
     texture.anisotropy = 16;
+    texture.colorSpace = THREE.SRGBColorSpace;
     textureCache.set(path, texture);
     return texture;
 }
+
 
 export class MCWorld {
     cellSize: number;
@@ -174,15 +175,10 @@ export class MCWorld {
                 return new THREE.MeshBasicMaterial({
                     color: new THREE.Color(material.str)
                 });
-            case "imgPath":
-
-                const texture = loadTexture(material.str)
-                if (texture) {
-                    return new THREE.MeshBasicMaterial({ map: texture });
-                } else {
-                    console.warn(`Texture not found: ${material.str}`);
-                    return new THREE.MeshBasicMaterial({ color: 0xffffff });
-                }
+            case "imgPath": {
+                const texture = loadTexture(material.str);
+                return new THREE.MeshBasicMaterial({ map: texture });
+            }
             default:
                 return new THREE.MeshBasicMaterial({ color: 0xffffff });
         }

@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { onMounted, watch } from 'vue';
 import { MCWorld, type BlockData } from './world';
+import { logger } from "../logger";
 
 const props = defineProps<{
   scene: THREE.Scene;
@@ -17,12 +18,14 @@ const world = new MCWorld(cellSize);
 
 // 统一的几何体更新逻辑
 function rebuildGeometry() {
+  logger.info(`rebuildGeometry: ${props.blocks.length} blocks`);
   // 清理旧 mesh
   const oldMesh = props.scene.children.find(child => child.type === 'Mesh');
   if (oldMesh) props.scene.remove(oldMesh);
 
   world.setBlocks(props.blocks);
   updateGeometry(world, props.scene);
+  logger.info(`scene children after rebuild: ${props.scene.children.length}`);
 }
 
 onMounted(() => {
@@ -87,7 +90,7 @@ function updateGeometry(world: MCWorld, scene: THREE.Scene) {
     });
   }
   geometry.groups = groups;
-  // geometry 的不同部分与材质的对应关系通过 材质索引（materialIndex） 和 几何分组（geometry.groups） 实现
+  logger.info(`updateGeometry: ${positions.length/3} verts, ${indices.length/6} faces, ${materials.length} materials`);
   const mesh = new THREE.Mesh(geometry, materials);
   scene.add(mesh);
 }

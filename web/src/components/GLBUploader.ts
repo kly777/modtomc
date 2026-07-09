@@ -171,7 +171,7 @@ export async function clusterVoxels(
 export async function matchBlocks(
   colors: { r: number; g: number; b: number }[],
   signal?: AbortSignal
-): Promise<string[]> {
+): Promise<{ top: string; bottom: string; side: string; all: string }[]> {
   const response = await axios.post('http://localhost:8080/api/match', { colors }, { signal })
   return response.data.blocks
 }
