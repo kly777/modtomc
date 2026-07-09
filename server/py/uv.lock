@@ -431,6 +431,8 @@ dependencies = [
     { name = "numpy" },
     { name = "open3d" },
     { name = "python-multipart" },
+    { name = "scikit-learn" },
+    { name = "scipy" },
     { name = "trimesh" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -441,6 +443,8 @@ requires-dist = [
     { name = "numpy", specifier = ">=2.3.2" },
     { name = "open3d", specifier = ">=0.19.0" },
     { name = "python-multipart", specifier = ">=0.0.20" },
+    { name = "scikit-learn", specifier = ">=1.6" },
+    { name = "scipy", specifier = ">=1.15" },
     { name = "trimesh", specifier = ">=4.7.4" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.34" },
 ]

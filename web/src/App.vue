@@ -10,10 +10,8 @@ import {
 } from "./components/Block";
 import * as THREE from "three";
 import type { PointData } from "./components/data";
-import { voxelizeGLB, computeAutoBlockSize } from "./components/GLBUploader";
-import { findPic } from "./findPic";
-import { segmentVoxels } from "./cluster";
-import { getColorTree, toggleNodeExpand, getVisiblePoints } from "./colorTree";
+import { voxelizeGLB, computeAutoBlockSize, clusterVoxels, matchBlocks } from "./components/GLBUploader";
+import { getVisiblePoints, toggleNodeExpand } from "./colorTree";
 import type { ColorTree } from "./colorTree";
 import ColorTreeNode from "./components/ColorTreeNode.vue";
 
@@ -42,34 +40,43 @@ const voxelData = ref<PointData[]>([]);
 // 标记是否正在处理，防止重复触发
 let isProcessing = false;
 
-// 监听文件变化：自动计算合适的体素大小
+// voxelize helper，统一调用入口
+async function runVoxelize(file: File, size: number) {
+    if (isProcessing) return;
+    isProcessing = true;
+    try {
+        const data = await voxelizeGLB(file, size);
+        voxelData.value = data.voxelData;
+    } catch (error) {
+        console.error("GLB转换失败:", error);
+    } finally {
+        isProcessing = false;
+    }
+}
+
+// 监听文件变化：自动计算合适的体素大小，然后直接触发体素化
 watch(glbFile, async (newFile) => {
     if (newFile) {
         try {
-            // 先计算模型尺寸，自动设置体素大小 = 模型长边 / 40
             const autoSize = await computeAutoBlockSize(newFile);
-            blockSize.value = Math.max(0.001, Math.round(autoSize * 1000) / 1000);
+            const size = Math.max(0.001, Math.round(autoSize * 1000) / 1000);
+            blockSize.value = size;
             console.log(`模型长边的 1/40 = ${autoSize.toFixed(4)}，设为体素大小`);
+            // 直接触发体素化，不依赖 blockSize watch（避免值相同时不触发）
+            await runVoxelize(newFile, size);
         } catch (error) {
             console.error("计算模型尺寸失败，使用默认体素大小:", error);
+            await runVoxelize(newFile, blockSize.value);
         }
     } else {
         voxelData.value = [];
     }
 });
 
-// 监听体素大小变化：触发实际的体素化处理（由文件变化或手动调整触发）
-watch(blockSize, async (newSize) => {
+// 监听体素大小手动调整：用户改变滑块时重新体素化
+watch(blockSize, (newSize) => {
     if (glbFile.value && !isProcessing) {
-        isProcessing = true;
-        try {
-            const data = await voxelizeGLB(glbFile.value, newSize);
-            voxelData.value = data.voxelData;
-        } catch (error) {
-            console.error("GLB转换失败:", error);
-        } finally {
-            isProcessing = false;
-        }
+        runVoxelize(glbFile.value, newSize);
     }
 });
 
@@ -83,25 +90,46 @@ const convertedBlocks = computed<BlockData[]>(() => {
     }));
 });
 
-// ===聚类体素颜色===
+// ===聚类体素颜色 (后端) ===
 
 const clusteredVoxelData = ref<PointData[][]>([]);
+const clusterLoading = ref(false);
 
 const colorThreshold = ref(5);
-
 const varianceThreshold = ref(0.01);
-// 监听 voxelData 的变化，进行聚类处理
-watch(
-    [voxelData, colorThreshold, varianceThreshold],
-    ([newVoxelData, colorThreshold, varianceThreshold]) => {
-        clusteredVoxelData.value = segmentVoxels(newVoxelData, {
-            colorThreshold,
-            varianceThreshold,
-        }).sort((a, b) => {
-            return a.length > b.length ? -1 : 1;
-        });
-    }
-);
+
+// 调用后端聚类 API
+let clusterDebounce: ReturnType<typeof setTimeout> | null = null;
+
+function triggerCluster(voxels: PointData[], ct: number, vt: number, ae: number) {
+    if (!voxels || voxels.length === 0) return;
+    if (clusterDebounce) clearTimeout(clusterDebounce);
+    clusterDebounce = setTimeout(async () => {
+        clusterLoading.value = true;
+        try {
+            const result = await clusterVoxels(voxels, ct, vt, ae);
+
+            const clusters: PointData[][] = [];
+            const labelMap = new Map<number, PointData[]>();
+            result.labels.forEach((label, i) => {
+                const voxel = voxels[i];
+                if (!voxel) return;
+                if (!labelMap.has(label)) labelMap.set(label, []);
+                labelMap.get(label)!.push(voxel);
+            });
+            labelMap.forEach((pts) => clusters.push(pts));
+            clusters.sort((a, b) => b.length - a.length);
+            clusteredVoxelData.value = clusters;
+
+            colorTree.value = result.color_tree as ColorTree;
+            updateVisiblePoints();
+        } catch (e) {
+            console.error("聚类失败:", e);
+        } finally {
+            clusterLoading.value = false;
+        }
+    }, 300);
+}
 
 const clusteredBlocks = computed<BlockData[]>(() => {
     let blocks: BlockData[] = [];
@@ -148,14 +176,10 @@ const colorTree = ref<ColorTree | null>(null);
 const autoExpend = ref(12); // 自动展开的阈值
 const kClusteredVoxelData = ref<PointData[]>([]);
 
+// voxelData / 聚类参数 / 展开阈值 任一变化 → 重新聚类
 watch(
-    [clusteredVoxelData, autoExpend],
-    ([newClusteredVoxelData, autoExpend]) => {
-        if (newClusteredVoxelData.length > 0) {
-            colorTree.value = getColorTree(newClusteredVoxelData, autoExpend);
-            updateVisiblePoints();
-        }
-    }
+    [voxelData, colorThreshold, varianceThreshold, autoExpend],
+    ([voxels, ct, vt, ae]) => triggerCluster(voxels, ct, vt, ae)
 );
 
 function updateVisiblePoints() {
@@ -171,14 +195,28 @@ function toggleNode(node: ColorTree) {
     }
 }
 
-// === 颜色匹配材质 ===
-const mcBlocks = computed<BlockData[]>(() => {
-    return kClusteredVoxelData.value.map((voxel) => ({
-        position: [voxel.position.x, voxel.position.y, voxel.position.z],
-        block: new FullBlockWithSamePic(
-            findPic(voxel.color) ? findPic(voxel.color)! : ""
-        ),
-    }));
+// === 颜色匹配材质 (后端) ===
+const mcBlocks = ref<BlockData[]>([]);
+const matchLoading = ref(false);
+
+watch(kClusteredVoxelData, async (points) => {
+    if (!points || points.length === 0) {
+        mcBlocks.value = [];
+        return;
+    }
+    matchLoading.value = true;
+    try {
+        const colors = points.map((p) => ({ r: p.color.r, g: p.color.g, b: p.color.b }));
+        const paths = await matchBlocks(colors);
+        mcBlocks.value = points.map((voxel, i) => ({
+            position: [voxel.position.x, voxel.position.y, voxel.position.z] as [number, number, number],
+            block: new FullBlockWithSamePic(paths[i] || ""),
+        }));
+    } catch (e) {
+        console.error("材质匹配失败:", e);
+    } finally {
+        matchLoading.value = false;
+    }
 });
 
 // 颜色树预览（纯色方块，不用 MC 贴图）

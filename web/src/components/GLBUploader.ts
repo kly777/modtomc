@@ -60,6 +60,44 @@ export function computeAutoBlockSize(file: File): Promise<number> {
 }
 
 
+/**
+ * 调用后端聚类 API，返回簇标签和颜色树。
+ * 等价比前端 segmentVoxels() + getColorTree()。
+ */
+export async function clusterVoxels(
+  points: PointData[],
+  colorThreshold: number,
+  varianceThreshold: number,
+  autoExpend: number
+): Promise<{
+  labels: number[]
+  clusters: { index: number; size: number; avg_r: number; avg_g: number; avg_b: number }[]
+  color_tree: any
+}> {
+  const response = await axios.post('http://localhost:8080/api/cluster', {
+    points: points.map(p => ({
+      x: p.position.x, y: p.position.y, z: p.position.z,
+      r: p.color.r, g: p.color.g, b: p.color.b,
+      v: p.variance
+    })),
+    color_threshold: colorThreshold,
+    variance_threshold: varianceThreshold,
+    auto_expend: autoExpend,
+  })
+  return response.data
+}
+
+/**
+ * 调用后端材质匹配 API。
+ * 等价比前端 findPic()。
+ */
+export async function matchBlocks(
+  colors: { r: number; g: number; b: number }[]
+): Promise<string[]> {
+  const response = await axios.post('http://localhost:8080/api/match', { colors })
+  return response.data.blocks
+}
+
 export const voxelizeGLB = async (file: File,blockSize:number): Promise<UploadResult> => {
   const formData = new FormData()
   formData.append('file', file)

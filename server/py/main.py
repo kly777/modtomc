@@ -8,10 +8,12 @@ FastAPI 后端入口（替换原 Go 后端）
 
 import logging
 import os
-import shutil
-import subprocess
 import sys
 from pathlib import Path
+
+# 修复 Windows 下 uvicorn 子进程中文 print 的编码问题
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding="utf-8")
 
 from fastapi import FastAPI, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -77,25 +79,15 @@ async def convert(file: UploadFile, blocksize: float = Form(default=0.03, alias=
     csv_filename = Path(file.filename).stem + ".csv"
     csv_path = OUTPUT_DIR / csv_filename
 
-    # 执行体素化
-    result = subprocess.run(
-        [
-            sys.executable, "-m", "uv",
-            "run", "process.py",
-            str(glb_path),
-            str(csv_path),
-            str(blocksize),
-        ],
-        cwd=str(SCRIPT_DIR),
-        capture_output=True,
-        text=True,
-        timeout=600,
-    )
+    # 执行体素化（直接调用，不走子进程）
+    from process import main as voxelize
 
-    if result.returncode != 0:
+    try:
+        voxelize(str(glb_path), str(csv_path), blocksize)
+    except Exception as e:
         glb_path.unlink(missing_ok=True)
-        logger.error(f"体素化失败:\n{result.stderr}")
-        raise HTTPException(500, f"体素化失败: {result.stderr[-500:]}")
+        logger.exception("体素化失败")
+        raise HTTPException(500, f"体素化失败: {e}")
 
     logger.info(f"体素化完成 → {csv_path}")
 
@@ -111,6 +103,53 @@ async def convert(file: UploadFile, blocksize: float = Form(default=0.03, alias=
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename={csv_filename}"},
     )
+
+
+# ── API：聚类 + 颜色树 ─────────────────────────────────
+from pydantic import BaseModel
+
+
+class ClusterRequest(BaseModel):
+    points: list[dict]
+    color_threshold: float = 5.0
+    variance_threshold: float = 0.01
+    auto_expend: float = 12.0
+
+
+@app.post("/api/cluster")
+async def api_cluster(req: ClusterRequest):
+    """
+    对体素点云做空间-颜色联合聚类，返回簇标签和颜色树。
+    等价比前端 segmentVoxels() + getColorTree()。
+    """
+    from compute import cluster_voxels, build_color_tree
+
+    labels, clusters = cluster_voxels(
+        req.points, req.color_threshold, req.variance_threshold
+    )
+    tree = build_color_tree(clusters, req.auto_expend)
+
+    return {
+        "labels": labels,
+        "clusters": clusters,
+        "color_tree": tree,
+    }
+
+
+class MatchRequest(BaseModel):
+    colors: list[dict]  # [{r, g, b}, ...] 0-1
+
+
+@app.post("/api/match")
+async def api_match(req: MatchRequest):
+    """
+    为每个颜色匹配最近的 Minecraft 方块贴图。
+    等价比前端 findPic()。
+    """
+    from compute import match_minecraft_blocks
+
+    file_paths = match_minecraft_blocks(req.colors)
+    return {"blocks": file_paths}
 
 
 # ── 静态文件服务 ───────────────────────────────────────
