@@ -113,6 +113,8 @@ class ClusterRequest(BaseModel):
     points: list[dict]
     color_threshold: float = 5.0
     variance_threshold: float = 0.01
+    pos_threshold: int = 1
+    min_cluster_size: int = 0
     auto_expend: float = 12.0
 
 
@@ -125,7 +127,11 @@ async def api_cluster(req: ClusterRequest):
     from compute import cluster_voxels, build_color_tree
 
     labels, clusters = cluster_voxels(
-        req.points, req.color_threshold, req.variance_threshold
+        req.points,
+        req.color_threshold,
+        req.variance_threshold,
+        req.pos_threshold,
+        req.min_cluster_size,
     )
     tree = build_color_tree(clusters, req.auto_expend)
 

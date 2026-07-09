@@ -86,18 +86,22 @@ def cluster_voxels(
     points: list[dict],
     color_threshold: float = 30,
     variance_threshold: float = 1.0,
+    pos_threshold: int = 1,
+    min_cluster_size: int = 0,
 ) -> tuple[list[int], list[dict]]:
     """
-    空间-颜色联合聚类，等价比前端 segmentVoxels()。
+    空间-颜色联合聚类。
 
     Args:
-        points: [{x, y, z, r, g, b, v}, ...]  (r/g/b 0-1, v=variance)
-        color_threshold: Lab 空间颜色距离阈值
-        variance_threshold: 方差过滤阈值
+        points: [{x, y, z, r, g, b, v}, ...]  (r/g/b 0-1)
+        color_threshold: Lab 空间颜色距离阈值（越大簇越少越大）
+        variance_threshold: 方差过滤阈值（只允许颜色方差≤此值的体素做种子）
+        pos_threshold: 空间邻接半径（1=直接邻居，2=允许跳一格）
+        min_cluster_size: 最小簇大小（小于此值的簇被丢弃）
 
     Returns:
-        labels: 每个点的簇 ID (-1 = 噪声)
-        clusters: 每个簇的摘要 [{index, size, avg_r, avg_g, avg_b}, ...]
+        labels: 每个点的簇 ID
+        clusters: 簇摘要列表
     """
     n = len(points)
     if n == 0:
@@ -137,35 +141,33 @@ def cluster_voxels(
     from scipy.sparse.csgraph import connected_components
 
     final_labels = np.full(n, -1, dtype=int)
-
-    # 为每个 DBSCAN 簇构建空间邻接图
     cluster_id = 0
     unique_db = np.unique(valid_labels)
-    # 空间邻接：曼哈顿距离 == 1
+
+    # 空间邻接：曼哈顿距离 ≤ pos_threshold
+    # 预生成偏移列表
+    offsets = []
+    rng = range(-pos_threshold, pos_threshold + 1)
+    for dx in rng:
+        for dy in rng:
+            for dz in rng:
+                if abs(dx) + abs(dy) + abs(dz) <= pos_threshold and not (dx == 0 and dy == 0 and dz == 0):
+                    offsets.append((dx, dy, dz))
     for db_label in unique_db:
         if db_label == -1:
             continue
         mask = valid_labels == db_label
-        idx = valid_indices[mask]  # 原始点索引
+        idx = valid_indices[mask]
         p = pos[idx]
 
-        # 构建空间邻接矩阵 (两点曼哈顿距离 = 1)
-        # 用字典加速: (x,y,z) → 局部索引
         coord_dict = {tuple(p[i]): i for i in range(len(p))}
         edges = []
-        for i, (x, y, z) in enumerate(p):
-            for dx, dy, dz in [
-                (1, 0, 0),
-                (-1, 0, 0),
-                (0, 1, 0),
-                (0, -1, 0),
-                (0, 0, 1),
-                (0, 0, -1),
-            ]:
+        for i_pt, (x, y, z) in enumerate(p):
+            for dx, dy, dz in offsets:
                 nb = (x + dx, y + dy, z + dz)
                 j = coord_dict.get(nb)
-                if j is not None and j > i:
-                    edges.append((i, j))
+                if j is not None and j > i_pt:
+                    edges.append((i_pt, j))
 
         if not edges:
             # 无邻居 → 每个点独立成簇
@@ -194,16 +196,21 @@ def cluster_voxels(
             final_labels[i] = cluster_id
             cluster_id += 1
 
-    # 构建簇摘要
+    # 构建簇摘要（同时过滤小簇）
     unique_clusters = np.unique(final_labels)
     clusters = []
     for cid in unique_clusters:
         c_mask = final_labels == cid
+        size = int(c_mask.sum())
+        if min_cluster_size > 0 and size < min_cluster_size:
+            # 丢弃过小簇，标记点为噪声
+            final_labels[c_mask] = -1
+            continue
         c_rgb = rgb[c_mask] / 255.0
         clusters.append(
             {
                 "index": int(cid),
-                "size": int(c_mask.sum()),
+                "size": size,
                 "avg_r": float(c_rgb[:, 0].mean()),
                 "avg_g": float(c_rgb[:, 1].mean()),
                 "avg_b": float(c_rgb[:, 2].mean()),

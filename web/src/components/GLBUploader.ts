@@ -135,6 +135,8 @@ export async function clusterVoxels(
   points: PointData[],
   colorThreshold: number,
   varianceThreshold: number,
+  posThreshold: number,
+  minClusterSize: number,
   autoExpend: number,
   signal?: AbortSignal
 ): Promise<{
@@ -150,6 +152,8 @@ export async function clusterVoxels(
     })),
     color_threshold: colorThreshold,
     variance_threshold: varianceThreshold,
+    pos_threshold: posThreshold,
+    min_cluster_size: minClusterSize,
     auto_expend: autoExpend,
   }, { signal })
   return response.data

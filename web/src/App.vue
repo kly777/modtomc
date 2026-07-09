@@ -111,13 +111,15 @@ const clusterLoading = ref(false);
 
 const colorThreshold = ref(5);
 const varianceThreshold = ref(0.01);
+const posThreshold = ref(1);
+const minClusterSize = ref(0);
 
 // 调用后端聚类 API（支持取消 + 防抖 + 序列号防乱序）
 let clusterDebounce: ReturnType<typeof setTimeout> | null = null;
 let clusterAbort: AbortController | null = null;
 let clusterSeq = 0;
 
-function triggerCluster(voxels: PointData[], ct: number, vt: number, ae: number) {
+function triggerCluster(voxels: PointData[], ct: number, vt: number, pt: number, mc: number, ae: number) {
     if (!voxels || voxels.length === 0) return;
     if (clusterDebounce) clearTimeout(clusterDebounce);
     if (clusterAbort) clusterAbort.abort();
@@ -128,7 +130,7 @@ function triggerCluster(voxels: PointData[], ct: number, vt: number, ae: number)
     clusterDebounce = setTimeout(async () => {
         clusterLoading.value = true;
         try {
-            const result = await clusterVoxels(voxels, ct, vt, ae, ctrl.signal);
+            const result = await clusterVoxels(voxels, ct, vt, pt, mc, ae, ctrl.signal);
             if (seq !== clusterSeq) return;  // 忽略过时响应
 
             const clusters: PointData[][] = [];
@@ -263,8 +265,8 @@ const kClusteredVoxelData = ref<PointData[]>([]);
 
 // voxelData / 聚类参数 / 展开阈值 任一变化 → 重新聚类
 watch(
-    [voxelData, colorThreshold, varianceThreshold, autoExpend],
-    ([voxels, ct, vt, ae]) => triggerCluster(voxels, ct, vt, ae)
+    [voxelData, colorThreshold, varianceThreshold, posThreshold, minClusterSize, autoExpend],
+    ([voxels, ct, vt, pt, mc, ae]) => triggerCluster(voxels, ct, vt, pt, mc, ae)
 );
 
 function toggleNode(node: ColorTree) {
@@ -363,6 +365,8 @@ const clusterCount = computed(() => clusteredVoxelData.value.length);
                         <div class="param-row">
                             <input type="number" v-model="blockSize" step="0.001" min="0.001" />
                         </div>
+                        <p class="hint">单个体素的边长（模型单位）。自动 = 模型最长边 / 40。</p>
+                        <p class="hint hint-detail">⬆ 调大 → 体素更稀疏，处理更快但精度低<br>⬇ 调小 → 体素更密，精度高但处理慢</p>
                     </div>
                     <div v-if="voxelCount" class="stat-box">
                         <span>体素总数：<strong>{{ voxelCount }}</strong></span>
@@ -375,18 +379,47 @@ const clusterCount = computed(() => clusteredVoxelData.value.length);
                 <!-- 步骤 3：颜色聚类 -->
                 <div v-else-if="currentStep === 3" class="param-section">
                     <h3>③ 颜色聚类</h3>
+
                     <div class="param-group">
                         <label>颜色阈值 (Lab 距离)</label>
                         <div class="param-row">
-                            <input type="number" v-model="colorThreshold" step="1" min="1" />
+                            <input type="number" v-model="colorThreshold" step="1" min="1" max="100" />
+                            <span class="param-val">{{ colorThreshold }}</span>
                         </div>
+                        <p class="hint">相邻体素视为"同色"的最大色差。Lab色彩空间的欧几里得距离。</p>
+                        <p class="hint hint-detail">⬆ 调大 → 簇更少更大，颜色合并更激进<br>⬇ 调小 → 簇更多更细，保留细微色差</p>
                     </div>
+
+                    <div class="param-group">
+                        <label>空间邻接半径</label>
+                        <div class="param-row">
+                            <input type="number" v-model="posThreshold" step="1" min="1" max="5" />
+                            <span class="param-val">{{ posThreshold }}</span>
+                        </div>
+                        <p class="hint">簇内相邻体素的最大网格距离。<b>1</b>=仅直接邻居，<b>2</b>=允许跳一格。</p>
+                        <p class="hint hint-detail">⬆ 调大 → 簇跨越更大空间区域<br>⬇ 调小 → 簇更紧凑</p>
+                    </div>
+
                     <div class="param-group">
                         <label>方差阈值</label>
                         <div class="param-row">
-                            <input type="number" v-model="varianceThreshold" step="0.001" min="0.001" />
+                            <input type="number" v-model="varianceThreshold" step="0.001" min="0" max="1" />
+                            <span class="param-val">{{ varianceThreshold }}</span>
                         </div>
+                        <p class="hint">体素颜色方差上限。只有方差 ≤ 此值的体素才能做簇种子。</p>
+                        <p class="hint hint-detail">⬆ 调大 → 包含更多噪声纹理区域<br>⬇ 调小 → 只保留平滑纯色区域</p>
                     </div>
+
+                    <div class="param-group">
+                        <label>最小簇大小</label>
+                        <div class="param-row">
+                            <input type="number" v-model="minClusterSize" step="1" min="0" />
+                            <span class="param-val">{{ minClusterSize }}</span>
+                        </div>
+                        <p class="hint">小于此值的簇会被丢弃（标记为噪声），用于过滤孤立体素。</p>
+                        <p class="hint hint-detail">设为 <b>0</b> 不丢弃任何簇。模型大时可设 5-10 清理噪点。</p>
+                    </div>
+
                     <div v-if="clusterCount" class="stat-box">
                         <span>簇数：<strong>{{ clusterCount }}</strong></span>
                     </div>
@@ -401,9 +434,10 @@ const clusterCount = computed(() => clusteredVoxelData.value.length);
                     <div class="param-group">
                         <label>自动展开阈值</label>
                         <div class="param-row">
-                            <input type="number" v-model="autoExpend" step="0.1" min="1" />
+                            <input type="number" v-model="autoExpend" step="0.1" min="1" max="200" />
                         </div>
-                        <p class="hint">颜色距离 > 阈值时自动展开，点击节点可手动展开/折叠</p>
+                        <p class="hint">树节点颜色距离 > 此值时自动展开。控制颜色树默认展开深度。</p>
+                        <p class="hint hint-detail">⬆ 调大 → 更多节点默认折叠，树更简洁<br>⬇ 调小 → 更多节点默认展开，树更详细<br>设为 <b>1</b> 展开所有节点，<b>100</b>+ 全部折叠</p>
                     </div>
                     <div v-if="colorTree" class="tree-box">
                         <ColorTreeNode :node="colorTree" @toggle="toggleNode" />
@@ -649,6 +683,22 @@ const clusterCount = computed(() => clusteredVoxelData.value.length);
     color: #999;
     margin: 6px 0 0 0;
     line-height: 1.4;
+}
+
+.hint-detail {
+    color: #bbb;
+    font-size: 0.72rem;
+    margin-top: 2px;
+    padding-left: 4px;
+    border-left: 2px solid #e0e0e0;
+}
+
+.param-val {
+    font-size: 0.85rem;
+    color: #3498db;
+    font-weight: 600;
+    min-width: 30px;
+    text-align: right;
 }
 
 /* 右侧 3D 查看器 */
