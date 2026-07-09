@@ -11,7 +11,7 @@ import {
 import * as THREE from "three";
 import type { PointData } from "./components/data";
 import { voxelizeGLB, computeAutoBlockSize, clusterVoxels, matchBlocks } from "./components/GLBUploader";
-import { getVisiblePoints, toggleNodeExpand } from "./colorTree";
+import { toggleNodeExpand } from "./colorTree";
 import type { ColorTree } from "./colorTree";
 import ColorTreeNode from "./components/ColorTreeNode.vue";
 
@@ -121,7 +121,19 @@ function triggerCluster(voxels: PointData[], ct: number, vt: number, ae: number)
             clusters.sort((a, b) => b.length - a.length);
             clusteredVoxelData.value = clusters;
 
-            colorTree.value = result.color_tree as ColorTree;
+            // 保存 label→points 映射，供颜色树可见点计算用
+            clusterPointMap.value = labelMap;
+
+            // 后端树节点是平铺 {r,g,b,...}，ColorTreeNode 期望 {color:{r,g,b},...}
+            // 补上 color 属性以兼容前端组件
+            const tree = result.color_tree as Record<string, unknown>;
+            function addNestedColor(node: Record<string, unknown>) {
+                node.color = { r: node.r, g: node.g, b: node.b };
+                const children = node.children as Record<string, unknown>[];
+                if (children) children.forEach(addNestedColor);
+            }
+            addNestedColor(tree);
+            colorTree.value = tree as unknown as ColorTree;
             updateVisiblePoints();
         } catch (e) {
             console.error("聚类失败:", e);
@@ -172,8 +184,57 @@ const clusteredBlocks = computed<BlockData[]>(() => {
 
 // 扩张聚类后，使用颜色对组再次聚类
 
+// 后端颜色树节点类型（不含 points 数组，用 cluster_index + clusterPointMap 代替）
+type BackendTreeNode = {
+    r: number; g: number; b: number;
+    n: number;
+    children: BackendTreeNode[];
+    expand: boolean;
+    cluster_index?: number;
+};
+
+const clusterPointMap = ref<Map<number, PointData[]>>(new Map());
+
+// 从后端树 + cluster map 计算可见点（替代原 colorTree.ts 的 getVisiblePoints）
+function getVisibleFromBackendTree(node: BackendTreeNode, map: Map<number, PointData[]>): PointData[] {
+    if (node.children.length > 0) {
+        if (node.expand) {
+            return node.children.flatMap(c => getVisibleFromBackendTree(c, map));
+        }
+        return collectDescendantPoints(node, map);
+    }
+    const ci = node.cluster_index;
+    if (ci !== undefined && map.has(ci)) {
+        return map.get(ci)!.map(p => ({
+            position: p.position, color: { r: node.r, g: node.g, b: node.b }, variance: p.variance,
+        }));
+    }
+    return [];
+}
+
+function collectDescendantPoints(node: BackendTreeNode, map: Map<number, PointData[]>): PointData[] {
+    if (node.children.length === 0) {
+        const ci = node.cluster_index;
+        if (ci !== undefined && map.has(ci)) {
+            return map.get(ci)!.map(p => ({
+                position: p.position, color: { r: node.r, g: node.g, b: node.b }, variance: p.variance,
+            }));
+        }
+        return [];
+    }
+    return node.children.flatMap(c => collectDescendantPoints(c, map))
+        .map(p => ({ ...p, color: { r: node.r, g: node.g, b: node.b } }));
+}
+
+function updateVisiblePoints() {
+    const tree = colorTree.value as unknown as BackendTreeNode | null;
+    if (tree && clusterPointMap.value.size > 0) {
+        kClusteredVoxelData.value = getVisibleFromBackendTree(tree, clusterPointMap.value);
+    }
+}
+
 const colorTree = ref<ColorTree | null>(null);
-const autoExpend = ref(12); // 自动展开的阈值
+const autoExpend = ref(12);
 const kClusteredVoxelData = ref<PointData[]>([]);
 
 // voxelData / 聚类参数 / 展开阈值 任一变化 → 重新聚类
@@ -181,12 +242,6 @@ watch(
     [voxelData, colorThreshold, varianceThreshold, autoExpend],
     ([voxels, ct, vt, ae]) => triggerCluster(voxels, ct, vt, ae)
 );
-
-function updateVisiblePoints() {
-    if (colorTree.value) {
-        kClusteredVoxelData.value = getVisiblePoints(colorTree.value);
-    }
-}
 
 function toggleNode(node: ColorTree) {
     if (colorTree.value) {
