@@ -51,6 +51,7 @@ const loadModel = (file: File) => {
   );
 };
 
+// 在组件挂载时立即检查 file prop，确保从其他步骤切回时模型能重新加载
 watch(() => props.file, (newFile) => {
   if (newFile) {
     loadModel(newFile);
@@ -61,7 +62,7 @@ watch(() => props.file, (newFile) => {
       model = null;
     }
   }
-});
+}, { immediate: true });
 </script>
 
 <template>

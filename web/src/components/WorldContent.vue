@@ -15,15 +15,23 @@ const props = defineProps<{
 const cellSize = 128;
 const world = new MCWorld(cellSize);
 
-onMounted(() => {
-  // 生成初始几何体
+// 统一的几何体更新逻辑
+function rebuildGeometry() {
+  // 清理旧 mesh
+  const oldMesh = props.scene.children.find(child => child.type === 'Mesh');
+  if (oldMesh) props.scene.remove(oldMesh);
+
+  world.setBlocks(props.blocks);
   updateGeometry(world, props.scene);
+}
+
+onMounted(() => {
+  // 挂载时立即用当前的 blocks 初始化（从其他步骤切回时需要）
+  rebuildGeometry();
 });
 
-watch(() => props.blocks, (newBlocks) => {
-  world.setBlocks(newBlocks);
-  props.scene.remove(props.scene.children.find(child => child.type === 'Mesh')!);
-  updateGeometry(world, props.scene);
+watch(() => props.blocks, () => {
+  rebuildGeometry();
 }, { deep: true });
 
 function updateGeometry(world: MCWorld, scene: THREE.Scene) {

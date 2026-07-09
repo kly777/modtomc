@@ -17,6 +17,19 @@ import { getColorTree, toggleNodeExpand, getVisiblePoints } from "./colorTree";
 import type { ColorTree } from "./colorTree";
 import ColorTreeNode from "./components/ColorTreeNode.vue";
 
+// === 步骤导航 ===
+const currentStep = ref(1);
+const totalSteps = 5;
+
+const stepLabels = ["导入模型", "体素化", "颜色聚类", "颜色树", "Minecraft 材质"];
+
+function goNext() {
+    if (currentStep.value < totalSteps) currentStep.value++;
+}
+function goPrev() {
+    if (currentStep.value > 1) currentStep.value--;
+}
+
 // ===导入glb模型===
 const glbFile = ref<File | null>(null);
 
@@ -167,245 +180,422 @@ const mcBlocks = computed<BlockData[]>(() => {
         ),
     }));
 });
+
+// 颜色树预览（纯色方块，不用 MC 贴图）
+const colorTreeBlocks = computed<BlockData[]>(() => {
+    return kClusteredVoxelData.value.map((voxel) => ({
+        position: [voxel.position.x, voxel.position.y, voxel.position.z],
+        block: new FullBlockWithPureColor(
+            new THREE.Color(voxel.color.r, voxel.color.g, voxel.color.b)
+        ),
+    }));
+});
+
+// 统计信息
+const voxelCount = computed(() => voxelData.value.length);
+const clusterCount = computed(() => clusteredVoxelData.value.length);
 </script>
 
 <template>
     <div class="app-container">
-        <div class="main-layout">
-            <div class="control-panel">
-                <div class="panel-section">
-                    <h2>模型处理</h2>
-                    <div class="control-group">
-                        <h3>导入模型</h3>
-                        <GLBImporter v-model="glbFile" />
-                    </div>
+        <!-- 步骤指示器 -->
+        <div class="step-bar">
+            <template v-for="(label, i) in stepLabels" :key="i">
+                <div
+                    class="step-dot"
+                    :class="{ active: currentStep === i + 1, done: currentStep > i + 1 }"
+                    @click="currentStep = i + 1"
+                >
+                    <span class="step-num">{{ currentStep > i + 1 ? '✓' : i + 1 }}</span>
+                    <span class="step-label">{{ label }}</span>
+                </div>
+                <div v-if="i < stepLabels.length - 1" class="step-line" :class="{ done: currentStep > i + 1 }" />
+            </template>
+        </div>
 
-                    <div class="control-group">
-                        <h3>体素化设置</h3>
-                        <div class="control-item">
-                            <label>体素大小:</label>
-                            <input
-                                type="number"
-                                v-model="blockSize"
-                                step="0.001"
-                                min="0.001"
-                                max="100"
-                            />
-                            <span class="value-display">{{ blockSize }}</span>
+        <!-- 步骤内容 -->
+        <div class="step-body">
+            <!-- 左侧参数面板 -->
+            <div class="step-sidebar">
+                <!-- 步骤 1：导入模型 -->
+                <div v-if="currentStep === 1" class="param-section">
+                    <h3>① 导入 GLB 模型</h3>
+                    <GLBImporter v-model="glbFile" />
+                    <div v-if="glbFile" class="param-group">
+                        <label>体素大小</label>
+                        <div class="param-row">
+                            <input type="number" v-model="blockSize" step="0.001" min="0.001" />
                         </div>
-                    </div>
-
-                    <div class="control-group">
-                        <h3>颜色聚类</h3>
-                        <div class="control-item">
-                            <label>颜色阈值:</label>
-                            <input
-                                type="number"
-                                v-model="colorThreshold"
-                                step="1"
-                                min="1"
-                            />
-                            <span class="value-display">{{
-                                colorThreshold
-                            }}</span>
-                        </div>
-                        <div class="control-item">
-                            <label>方差阈值:</label>
-                            <input
-                                type="number"
-                                v-model="varianceThreshold"
-                                step="0.001"
-                                min="0.001"
-                                max="100"
-                            />
-                            <span class="value-display">{{
-                                varianceThreshold
-                            }}</span>
-                        </div>
+                        <p class="hint">自动计算 = 模型最长边 / 40，可手动调整</p>
                     </div>
                 </div>
 
-                <div class="panel-section">
-                    <h2>颜色树控制</h2>
-                    <div class="control-group">
-                        <div class="control-item">
-                            <label>自动展开阈值:</label>
-                            <input
-                                type="number"
-                                v-model="autoExpend"
-                                step="0.1"
-                                min="1"
-                            />
-                            <span class="value-display">{{ autoExpend }}</span>
+                <!-- 步骤 2：体素化结果 -->
+                <div v-else-if="currentStep === 2" class="param-section">
+                    <h3>② 体素化结果</h3>
+                    <div class="param-group">
+                        <label>体素大小</label>
+                        <div class="param-row">
+                            <input type="number" v-model="blockSize" step="0.001" min="0.001" />
                         </div>
                     </div>
-                    <div class="tree-control" v-if="colorTree">
+                    <div v-if="voxelCount" class="stat-box">
+                        <span>体素总数：<strong>{{ voxelCount }}</strong></span>
+                    </div>
+                </div>
+
+                <!-- 步骤 3：颜色聚类 -->
+                <div v-else-if="currentStep === 3" class="param-section">
+                    <h3>③ 颜色聚类</h3>
+                    <div class="param-group">
+                        <label>颜色阈值 (Lab 距离)</label>
+                        <div class="param-row">
+                            <input type="number" v-model="colorThreshold" step="1" min="1" />
+                        </div>
+                    </div>
+                    <div class="param-group">
+                        <label>方差阈值</label>
+                        <div class="param-row">
+                            <input type="number" v-model="varianceThreshold" step="0.001" min="0.001" />
+                        </div>
+                    </div>
+                    <div v-if="clusterCount" class="stat-box">
+                        <span>簇数：<strong>{{ clusterCount }}</strong></span>
+                    </div>
+                </div>
+
+                <!-- 步骤 4：颜色树 -->
+                <div v-else-if="currentStep === 4" class="param-section">
+                    <h3>④ 颜色树</h3>
+                    <div class="param-group">
+                        <label>自动展开阈值</label>
+                        <div class="param-row">
+                            <input type="number" v-model="autoExpend" step="0.1" min="1" />
+                        </div>
+                        <p class="hint">颜色距离 > 阈值时自动展开，点击节点可手动展开/折叠</p>
+                    </div>
+                    <div v-if="colorTree" class="tree-box">
                         <ColorTreeNode :node="colorTree" @toggle="toggleNode" />
                     </div>
                 </div>
+
+                <!-- 步骤 5：Minecraft 材质 -->
+                <div v-else-if="currentStep === 5" class="param-section">
+                    <h3>⑤ Minecraft 材质</h3>
+                    <div v-if="mcBlocks.length" class="stat-box">
+                        <span>最终方块数：<strong>{{ mcBlocks.length }}</strong></span>
+                    </div>
+                    <p class="hint">已自动匹配 Minecraft 方块贴图，完成！</p>
+                </div>
             </div>
 
-            <div class="preview-grid">
-                <div class="preview-item">
-                    <h3>原始模型</h3>
-                    <GLBViewer :file="glbFile" :scale="1 / blockSize" />
+            <!-- 右侧 3D 查看器 -->
+            <div class="step-viewer">
+                <div v-if="currentStep === 1">
+                    <div v-if="!glbFile" class="empty-state">
+                        <span>📦 请先导入一个 .glb 模型文件</span>
+                    </div>
+                    <GLBViewer v-else :file="glbFile" :scale="1 / blockSize" />
                 </div>
-                <div class="preview-item">
-                    <h3>体素化结果</h3>
-                    <World :blocks="convertedBlocks" />
+                <div v-else-if="currentStep === 2">
+                    <div v-if="!voxelCount" class="empty-state">
+                        <span>⏳ 体素化处理中...</span>
+                    </div>
+                    <World v-else :blocks="convertedBlocks" />
                 </div>
-                <div class="preview-item">
-                    <h3>颜色聚类</h3>
+                <div v-else-if="currentStep === 3">
                     <World :blocks="clusteredBlocks" />
                 </div>
-                <div class="preview-item">
-                    <h3>Minecraft材质</h3>
+                <div v-else-if="currentStep === 4">
+                    <World :blocks="colorTreeBlocks" />
+                </div>
+                <div v-else-if="currentStep === 5">
                     <World :blocks="mcBlocks" />
                 </div>
             </div>
+        </div>
+
+        <!-- 底部导航 -->
+        <div class="step-nav">
+            <button class="nav-btn prev" :disabled="currentStep === 1" @click="goPrev">
+                ← 上一步
+            </button>
+            <div class="nav-info">
+                {{ currentStep }} / {{ totalSteps }}
+            </div>
+            <button class="nav-btn next" :disabled="currentStep === totalSteps" @click="goNext">
+                下一步 →
+            </button>
         </div>
     </div>
 </template>
 
 <style scoped>
+/* === 布局 === */
 .app-container {
     display: flex;
     flex-direction: column;
     height: 100vh;
-    background-color: #f8f9fa;
+    background: #f0f2f5;
 }
 
-.app-header h1 {
-    margin: 0;
-    font-size: 1.8rem;
-}
-
-.app-header p {
-    margin: 5px 0 0;
-    opacity: 0.8;
-}
-
-.main-layout {
+/* === 步骤指示条 === */
+.step-bar {
     display: flex;
-    flex: 1;
-    overflow: hidden;
+    align-items: center;
+    justify-content: center;
+    padding: 16px 24px;
+    background: white;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    gap: 0;
+    flex-shrink: 0;
 }
 
-.control-panel {
-    width: 300px;
-    background-color: white;
-    padding: 20px;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-    overflow-y: auto;
+.step-dot {
     display: flex;
     flex-direction: column;
-    gap: 25px;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    position: relative;
+    z-index: 1;
+    min-width: 72px;
 }
 
-.panel-section {
-    padding: 15px;
-    background-color: #f8f9fa;
-    border-radius: 8px;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+.step-num {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: #e0e0e0;
+    color: #999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 600;
+    transition: all 0.3s;
 }
 
-.panel-section h2 {
-    margin-top: 0;
-    padding-bottom: 10px;
-    border-bottom: 1px solid #e0e0e0;
+.step-dot.active .step-num {
+    background: #3498db;
+    color: white;
+    box-shadow: 0 0 0 4px rgba(52,152,219,0.25);
+}
+
+.step-dot.done .step-num {
+    background: #27ae60;
+    color: white;
+}
+
+.step-label {
+    font-size: 11px;
+    color: #999;
+    white-space: nowrap;
+}
+
+.step-dot.active .step-label {
+    color: #3498db;
+    font-weight: 600;
+}
+
+.step-dot.done .step-label {
+    color: #27ae60;
+}
+
+.step-line {
+    width: 40px;
+    height: 2px;
+    background: #e0e0e0;
+    margin: 0 2px;
+    margin-bottom: 20px;
+    transition: background 0.3s;
+}
+
+.step-line.done {
+    background: #27ae60;
+}
+
+/* === 步骤主体 === */
+.step-body {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+    gap: 0;
+}
+
+/* 左侧参数面板 */
+.step-sidebar {
+    width: 280px;
+    min-width: 280px;
+    background: white;
+    padding: 16px;
+    overflow-y: auto;
+    box-shadow: 1px 0 4px rgba(0,0,0,0.04);
+}
+
+.param-section h3 {
+    margin: 0 0 12px 0;
+    font-size: 1.05rem;
     color: #2c3e50;
 }
 
-.control-group {
-    margin-bottom: 20px;
+.param-group {
+    margin-bottom: 14px;
 }
 
-.control-group h3 {
-    margin: 15px 0 10px;
-    font-size: 1.1rem;
-    color: #3498db;
-}
-
-.control-item {
-    display: flex;
-    align-items: center;
-    margin: 10px 0;
-}
-
-.control-item label {
-    width: 100px;
+.param-group label {
+    display: block;
+    font-size: 0.85rem;
+    color: #666;
+    margin-bottom: 4px;
     font-weight: 500;
 }
 
-.control-item input {
-    flex: 1;
-    padding: 8px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-}
-
-.value-display {
-    width: 60px;
-    text-align: right;
-    margin-left: 10px;
-}
-
-.tree-control {
-    max-height: 300px;
-    overflow-y: auto;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    padding: 10px;
-    background-color: white;
-}
-
-.preview-grid {
-    flex: 1;
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    grid-template-rows: repeat(2, 1fr);
-    gap: 15px;
-    padding: 20px;
-    background-color: #f0f2f5;
-}
-
-.preview-item {
-    background-color: white;
-    border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
-    overflow: hidden;
+.param-row {
     display: flex;
-    flex-direction: column;
+    align-items: center;
+    gap: 8px;
 }
 
-.preview-item h3 {
-    margin: 0;
-    padding: 12px 15px;
-    background-color: #3498db;
-    color: white;
-    font-size: 1.1rem;
+.param-row input {
+    width: 100%;
+    max-width: 120px;
+    padding: 6px 8px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    transition: border-color 0.2s;
 }
 
-.preview-item > div {
+.param-row input:focus {
+    border-color: #3498db;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(52,152,219,0.15);
+}
+
+.stat-box {
+    background: #eef6ff;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 0.9rem;
+    color: #2c3e50;
+    margin-top: 8px;
+}
+
+.stat-box strong {
+    color: #3498db;
+}
+
+.tree-box {
+    margin-top: 8px;
+    max-height: calc(100vh - 280px);
+    overflow-y: auto;
+}
+
+.hint {
+    font-size: 0.78rem;
+    color: #999;
+    margin: 6px 0 0 0;
+    line-height: 1.4;
+}
+
+/* 右侧 3D 查看器 */
+.step-viewer {
     flex: 1;
-    min-height: 0;
-    /* 修复flex布局问题 */
+    overflow: hidden;
+    background: white;
+    margin: 8px;
+    margin-left: 0;
+    border-radius: 8px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
 }
 
-/* 响应式设计 */
-@media (max-width: 1200px) {
-    .main-layout {
+.step-viewer > div {
+    width: 100%;
+    height: 100%;
+}
+
+.empty-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #bbb;
+    font-size: 1.2rem;
+}
+
+/* === 底部导航 === */
+.step-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    padding: 12px 24px;
+    background: white;
+    box-shadow: 0 -1px 4px rgba(0,0,0,0.06);
+    flex-shrink: 0;
+}
+
+.nav-btn {
+    padding: 8px 28px;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-weight: 500;
+}
+
+.nav-btn.prev {
+    background: #f0f2f5;
+    color: #555;
+}
+
+.nav-btn.prev:hover:not(:disabled) {
+    background: #e0e4e8;
+}
+
+.nav-btn.next {
+    background: #3498db;
+    color: white;
+}
+
+.nav-btn.next:hover:not(:disabled) {
+    background: #2980b9;
+}
+
+.nav-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.nav-info {
+    color: #999;
+    font-size: 0.9rem;
+}
+
+/* === 响应式 === */
+@media (max-width: 768px) {
+    .step-body {
         flex-direction: column;
     }
 
-    .control-panel {
+    .step-sidebar {
         width: 100%;
-        max-height: 300px;
+        min-width: 0;
+        max-height: 160px;
     }
 
-    .preview-grid {
-        grid-template-columns: 1fr;
-        grid-template-rows: repeat(4, 1fr);
+    .step-dot {
+        min-width: 50px;
+    }
+
+    .step-label {
+        font-size: 10px;
+    }
+
+    .step-line {
+        width: 20px;
     }
 }
 </style>
