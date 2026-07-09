@@ -247,7 +247,7 @@ def test_auto_params(rows):
     p90_v = variances[len(variances) * 9 // 10] if variances else 0.01
     print(f"  Lab 距离 P50={lab_dists[len(lab_dists)//2]:.2f} P75={p75:.2f} P90={lab_dists[len(lab_dists)*9//10]:.2f}")
     print(f"  Variance P50={variances[len(variances)//2]:.4f} P90={p90_v:.4f}")
-    print(f"  推荐参数: colorThreshold={max(1, round(p75))} varianceThreshold={max(0.001, round(p90_v*1000)/1000):.3f} autoExpend={max(2, round(p75*3))}")
+    print(f"  推荐参数: colorThreshold={max(1, round(p75))} varianceThreshold={max(0.001, round(p90_v*1000)/1000):.3f} autoExpend={max(1, round(p75))}")
     print("  ✓ 自动参数计算完成")
 
 

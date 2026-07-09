@@ -260,7 +260,7 @@ function updateVisiblePoints() {
 }
 
 const colorTree = ref<ColorTree | null>(null);
-const autoExpend = ref(12);
+const autoExpend = ref(1);  // 默认展开所有节点（1=几乎全部展开）
 const kClusteredVoxelData = ref<PointData[]>([]);
 
 // voxelData / 聚类参数 / 展开阈值 任一变化 → 重新聚类
@@ -274,6 +274,12 @@ function toggleNode(node: ColorTree) {
         toggleNodeExpand(colorTree.value, node);
         updateVisiblePoints();
     }
+}
+
+function expandAllNodes(tree: ColorTree, expand: boolean) {
+    tree.expand = expand;
+    tree.children.forEach(c => expandAllNodes(c, expand));
+    updateVisiblePoints();
 }
 
 // === 颜色匹配材质 (后端) ===
@@ -437,9 +443,13 @@ const clusterCount = computed(() => clusteredVoxelData.value.length);
                             <input type="number" v-model="autoExpend" step="0.1" min="1" max="200" />
                         </div>
                         <p class="hint">树节点颜色距离 > 此值时自动展开。控制颜色树默认展开深度。</p>
-                        <p class="hint hint-detail">⬆ 调大 → 更多节点默认折叠，树更简洁<br>⬇ 调小 → 更多节点默认展开，树更详细<br>设为 <b>1</b> 展开所有节点，<b>100</b>+ 全部折叠</p>
+                        <p class="hint hint-detail">设为 <b>1</b> 默认全部展开，便于查看所有颜色<br>设为 <b>50</b>+ 全部折叠，手动展开感兴趣的分组<br>点击节点或使用下方按钮可手动切换</p>
                     </div>
                     <div v-if="colorTree" class="tree-box">
+                        <div class="tree-actions">
+                            <button class="tree-btn" @click="expandAllNodes(colorTree, true)">全部展开</button>
+                            <button class="tree-btn" @click="expandAllNodes(colorTree, false)">全部折叠</button>
+                        </div>
                         <ColorTreeNode :node="colorTree" @toggle="toggleNode" />
                     </div>
                 </div>
@@ -676,6 +686,26 @@ const clusterCount = computed(() => clusteredVoxelData.value.length);
     margin-top: 8px;
     max-height: calc(100vh - 280px);
     overflow-y: auto;
+}
+
+.tree-actions {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.tree-btn {
+    padding: 3px 10px;
+    font-size: 0.78rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: #f8f9fa;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.tree-btn:hover {
+    background: #e9ecef;
 }
 
 .hint {

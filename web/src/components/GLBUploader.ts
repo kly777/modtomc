@@ -115,7 +115,7 @@ export function computeAutoParams(points: PointData[]): {
   return {
     colorThreshold: Math.max(1, Math.round(p75)),
     varianceThreshold: Math.max(0.001, Math.round(p90 * 1000) / 1000),
-    autoExpend: Math.max(2, Math.round(p75 * 3)),
+    autoExpend: Math.max(1, Math.round(p75)),
   };
 }
 
