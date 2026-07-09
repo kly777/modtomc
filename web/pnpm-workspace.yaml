@@ -1,0 +1,11 @@
+allowBuilds:
+  esbuild: set this to true or false
+
+packages:
+  - '.'
+
+onlyBuiltDependencies:
+  - esbuild
+
+overrides:
+  vite: npm:rolldown-vite@7.1.14
