@@ -10,7 +10,7 @@ import {
 } from "./components/Block";
 import * as THREE from "three";
 import type { PointData } from "./components/data";
-import { voxelizeGLB } from "./components/GLBUploader";
+import { voxelizeGLB, computeAutoBlockSize } from "./components/GLBUploader";
 import { findPic } from "./findPic";
 import { segmentVoxels } from "./cluster";
 import { getColorTree, toggleNodeExpand, getVisiblePoints } from "./colorTree";
@@ -26,16 +26,37 @@ const blockSize = ref(0.02);
 // rgb范围为0-1
 const voxelData = ref<PointData[]>([]);
 
-// 使用 watch 监听依赖
-watch([glbFile, blockSize], ([newFile, newSize]) => {
+// 标记是否正在处理，防止重复触发
+let isProcessing = false;
+
+// 监听文件变化：自动计算合适的体素大小
+watch(glbFile, async (newFile) => {
     if (newFile) {
-        voxelizeGLB(newFile, newSize)
-            .then((data) => {
-                voxelData.value = data.voxelData; // 更新 ref 的值
-            })
-            .catch((error) => {
-                console.error("GLB转换失败:", error);
-            });
+        try {
+            // 先计算模型尺寸，自动设置体素大小 = 模型长边 / 40
+            const autoSize = await computeAutoBlockSize(newFile);
+            blockSize.value = Math.max(0.001, Math.round(autoSize * 1000) / 1000);
+            console.log(`模型长边的 1/40 = ${autoSize.toFixed(4)}，设为体素大小`);
+        } catch (error) {
+            console.error("计算模型尺寸失败，使用默认体素大小:", error);
+        }
+    } else {
+        voxelData.value = [];
+    }
+});
+
+// 监听体素大小变化：触发实际的体素化处理（由文件变化或手动调整触发）
+watch(blockSize, async (newSize) => {
+    if (glbFile.value && !isProcessing) {
+        isProcessing = true;
+        try {
+            const data = await voxelizeGLB(glbFile.value, newSize);
+            voxelData.value = data.voxelData;
+        } catch (error) {
+            console.error("GLB转换失败:", error);
+        } finally {
+            isProcessing = false;
+        }
     }
 });
 
