@@ -67,6 +67,8 @@ export function computeAutoBlockSize(file: File): Promise<number> {
 export function computeAutoParams(points: PointData[]): {
   colorThreshold: number
   varianceThreshold: number
+  posThreshold: number
+  minClusterSize: number
   autoExpend: number
 } {
   const sample = points.length > 2000 ? points.slice(0, 2000) : points;
@@ -102,20 +104,23 @@ export function computeAutoParams(points: PointData[]): {
   }
 
   if (labDistances.length === 0) {
-    return { colorThreshold: 5, varianceThreshold: 0.01, autoExpend: 12 };
+    return { colorThreshold: 5, varianceThreshold: 0.01, posThreshold: 1, minClusterSize: 0, autoExpend: 5 };
   }
 
   // 排序取分位数
   labDistances.sort((a, b) => a - b);
   variances.sort((a, b) => a - b);
 
-  const p75 = labDistances[Math.floor(labDistances.length * 0.75)] ?? 5;
-  const p90 = variances[Math.floor(variances.length * 0.9)] ?? 0.01;
+  const p25 = labDistances[Math.floor(labDistances.length * 0.25)] ?? 3;
+  const p90v = variances[Math.floor(variances.length * 0.9)] ?? 0.01;
 
   return {
-    colorThreshold: Math.max(1, Math.round(p75)),
-    varianceThreshold: Math.max(0.001, Math.round(p90 * 1000) / 1000),
-    autoExpend: Math.max(1, Math.round(p75)),
+    // P25: 保守估计，保留细微色差，让用户后续在颜色树中手动合并
+    colorThreshold: Math.max(1, Math.round(p25)),
+    varianceThreshold: Math.max(0.001, Math.round(p90v * 500) / 1000),
+    posThreshold: 1,         // 紧邻接
+    minClusterSize: 0,        // 不丢弃
+    autoExpend: 1,            // 全部展开
   };
 }
 

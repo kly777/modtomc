@@ -56,8 +56,10 @@ async function runVoxelize(file: File, size: number) {
             const auto = computeAutoParams(data.voxelData);
             colorThreshold.value = auto.colorThreshold;
             varianceThreshold.value = auto.varianceThreshold;
+            posThreshold.value = auto.posThreshold;
+            minClusterSize.value = auto.minClusterSize;
             autoExpend.value = auto.autoExpend;
-            console.log(`自动参数: colorThreshold=${auto.colorThreshold} varianceThreshold=${auto.varianceThreshold} autoExpend=${auto.autoExpend}`);
+            console.log(`自动参数: ct=${auto.colorThreshold} vt=${auto.varianceThreshold} pt=${auto.posThreshold} mc=${auto.minClusterSize} ae=${auto.autoExpend}`);
         }
     } catch (error: unknown) {
         if (error instanceof DOMException && error.name === 'AbortError') return;

@@ -243,11 +243,14 @@ def test_auto_params(rows):
 
     lab_dists.sort()
     variances.sort()
-    p75 = lab_dists[len(lab_dists) * 3 // 4] if lab_dists else 5
+    p25 = lab_dists[len(lab_dists) // 4] if lab_dists else 3
+    p50 = lab_dists[len(lab_dists) // 2] if lab_dists else 5
     p90_v = variances[len(variances) * 9 // 10] if variances else 0.01
-    print(f"  Lab 距离 P50={lab_dists[len(lab_dists)//2]:.2f} P75={p75:.2f} P90={lab_dists[len(lab_dists)*9//10]:.2f}")
-    print(f"  Variance P50={variances[len(variances)//2]:.4f} P90={p90_v:.4f}")
-    print(f"  推荐参数: colorThreshold={max(1, round(p75))} varianceThreshold={max(0.001, round(p90_v*1000)/1000):.3f} autoExpend={max(1, round(p75))}")
+    print(f"  Lab P25={p25:.2f} P50={p50:.2f} P75={lab_dists[len(lab_dists)*3//4]:.2f} P90={lab_dists[len(lab_dists)*9//10]:.2f}")
+    print(f"  Variance P90={p90_v:.4f}")
+    ct = max(1, round(p25))
+    vt = max(0.001, round(p90_v * 500) / 1000)
+    print(f"  推荐: ct={ct} vt={vt:.3f} pt=1 mc=0 ae=1 (保守细粒度)")
     print("  ✓ 自动参数计算完成")
 
 
