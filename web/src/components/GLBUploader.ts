@@ -68,7 +68,8 @@ export async function clusterVoxels(
   points: PointData[],
   colorThreshold: number,
   varianceThreshold: number,
-  autoExpend: number
+  autoExpend: number,
+  signal?: AbortSignal
 ): Promise<{
   labels: number[]
   clusters: { index: number; size: number; avg_r: number; avg_g: number; avg_b: number }[]
@@ -83,7 +84,7 @@ export async function clusterVoxels(
     color_threshold: colorThreshold,
     variance_threshold: varianceThreshold,
     auto_expend: autoExpend,
-  })
+  }, { signal })
   return response.data
 }
 
@@ -92,13 +93,14 @@ export async function clusterVoxels(
  * 等价比前端 findPic()。
  */
 export async function matchBlocks(
-  colors: { r: number; g: number; b: number }[]
+  colors: { r: number; g: number; b: number }[],
+  signal?: AbortSignal
 ): Promise<string[]> {
-  const response = await axios.post('http://localhost:8080/api/match', { colors })
+  const response = await axios.post('http://localhost:8080/api/match', { colors }, { signal })
   return response.data.blocks
 }
 
-export const voxelizeGLB = async (file: File,blockSize:number): Promise<UploadResult> => {
+export const voxelizeGLB = async (file: File, blockSize: number, signal?: AbortSignal): Promise<UploadResult> => {
   const formData = new FormData()
   formData.append('file', file)
   formData.append('blockSize', blockSize.toString())
@@ -108,7 +110,8 @@ export const voxelizeGLB = async (file: File,blockSize:number): Promise<UploadRe
     responseType: 'blob',
     headers: {
       'Content-Type': 'multipart/form-data'
-    }
+    },
+    signal
   })
 
   return new Promise<UploadResult>((resolve, reject) => {

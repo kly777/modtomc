@@ -39,18 +39,23 @@ const voxelData = ref<PointData[]>([]);
 
 // 标记是否正在处理，防止重复触发
 let isProcessing = false;
+let voxelAbort: AbortController | null = null;
 
-// voxelize helper，统一调用入口
+// voxelize helper，统一调用入口（新请求自动取消旧请求）
 async function runVoxelize(file: File, size: number) {
-    if (isProcessing) return;
+    if (voxelAbort) voxelAbort.abort();
+    voxelAbort = new AbortController();
+    const ctrl = voxelAbort;
     isProcessing = true;
     try {
-        const data = await voxelizeGLB(file, size);
+        const data = await voxelizeGLB(file, size, ctrl.signal);
         voxelData.value = data.voxelData;
-    } catch (error) {
+    } catch (error: unknown) {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        if (error && typeof error === 'object' && (error as any).code === 'ERR_CANCELED') return;
         console.error("GLB转换失败:", error);
     } finally {
-        isProcessing = false;
+        if (voxelAbort === ctrl) { isProcessing = false; voxelAbort = null; }
     }
 }
 
@@ -75,7 +80,7 @@ watch(glbFile, async (newFile) => {
 
 // 监听体素大小手动调整：用户改变滑块时重新体素化
 watch(blockSize, (newSize) => {
-    if (glbFile.value && !isProcessing) {
+    if (glbFile.value) {
         runVoxelize(glbFile.value, newSize);
     }
 });
@@ -98,16 +103,24 @@ const clusterLoading = ref(false);
 const colorThreshold = ref(5);
 const varianceThreshold = ref(0.01);
 
-// 调用后端聚类 API
+// 调用后端聚类 API（支持取消 + 防抖 + 序列号防乱序）
 let clusterDebounce: ReturnType<typeof setTimeout> | null = null;
+let clusterAbort: AbortController | null = null;
+let clusterSeq = 0;
 
 function triggerCluster(voxels: PointData[], ct: number, vt: number, ae: number) {
     if (!voxels || voxels.length === 0) return;
     if (clusterDebounce) clearTimeout(clusterDebounce);
+    if (clusterAbort) clusterAbort.abort();
+    clusterAbort = new AbortController();
+    const ctrl = clusterAbort;
+    const seq = ++clusterSeq;
+
     clusterDebounce = setTimeout(async () => {
         clusterLoading.value = true;
         try {
-            const result = await clusterVoxels(voxels, ct, vt, ae);
+            const result = await clusterVoxels(voxels, ct, vt, ae, ctrl.signal);
+            if (seq !== clusterSeq) return;  // 忽略过时响应
 
             const clusters: PointData[][] = [];
             const labelMap = new Map<number, PointData[]>();
@@ -135,10 +148,12 @@ function triggerCluster(voxels: PointData[], ct: number, vt: number, ae: number)
             addNestedColor(tree);
             colorTree.value = tree as unknown as ColorTree;
             updateVisiblePoints();
-        } catch (e) {
+        } catch (e: unknown) {
+            if (e instanceof DOMException && e.name === 'AbortError') return;
+            if (e && typeof e === 'object' && (e as any).code === 'ERR_CANCELED') return;
             console.error("聚类失败:", e);
         } finally {
-            clusterLoading.value = false;
+            if (clusterAbort === ctrl) { clusterLoading.value = false; clusterAbort = null; }
         }
     }, 300);
 }
@@ -253,25 +268,33 @@ function toggleNode(node: ColorTree) {
 // === 颜色匹配材质 (后端) ===
 const mcBlocks = ref<BlockData[]>([]);
 const matchLoading = ref(false);
+let matchAbort: AbortController | null = null;
+let matchSeq = 0;
 
-watch(kClusteredVoxelData, async (points) => {
-    if (!points || points.length === 0) {
-        mcBlocks.value = [];
-        return;
-    }
+watch(kClusteredVoxelData, (points) => {
+    if (!points || points.length === 0) { mcBlocks.value = []; return; }
+    if (matchAbort) matchAbort.abort();
+    matchAbort = new AbortController();
+    const ctrl = matchAbort;
+    const seq = ++matchSeq;
     matchLoading.value = true;
-    try {
-        const colors = points.map((p) => ({ r: p.color.r, g: p.color.g, b: p.color.b }));
-        const paths = await matchBlocks(colors);
-        mcBlocks.value = points.map((voxel, i) => ({
-            position: [voxel.position.x, voxel.position.y, voxel.position.z] as [number, number, number],
-            block: new FullBlockWithSamePic(paths[i] || ""),
-        }));
-    } catch (e) {
-        console.error("材质匹配失败:", e);
-    } finally {
-        matchLoading.value = false;
-    }
+    (async () => {
+        try {
+            const colors = points.map((p) => ({ r: p.color.r, g: p.color.g, b: p.color.b }));
+            const paths = await matchBlocks(colors, ctrl.signal);
+            if (seq !== matchSeq) return;
+            mcBlocks.value = points.map((voxel, i) => ({
+                position: [voxel.position.x, voxel.position.y, voxel.position.z] as [number, number, number],
+                block: new FullBlockWithSamePic(paths[i] || ""),
+            }));
+        } catch (e: unknown) {
+            if (e instanceof DOMException && e.name === 'AbortError') return;
+            if (e && typeof e === 'object' && (e as any).code === 'ERR_CANCELED') return;
+            console.error("材质匹配失败:", e);
+        } finally {
+            if (matchAbort === ctrl) { matchLoading.value = false; matchAbort = null; }
+        }
+    })();
 });
 
 // 颜色树预览（纯色方块，不用 MC 贴图）
@@ -335,6 +358,9 @@ const clusterCount = computed(() => clusteredVoxelData.value.length);
                     <div v-if="voxelCount" class="stat-box">
                         <span>体素总数：<strong>{{ voxelCount }}</strong></span>
                     </div>
+                    <div v-if="isProcessing" class="loading-box">
+                        <span>⏳ 正在体素化...</span>
+                    </div>
                 </div>
 
                 <!-- 步骤 3：颜色聚类 -->
@@ -354,6 +380,9 @@ const clusterCount = computed(() => clusteredVoxelData.value.length);
                     </div>
                     <div v-if="clusterCount" class="stat-box">
                         <span>簇数：<strong>{{ clusterCount }}</strong></span>
+                    </div>
+                    <div v-if="clusterLoading" class="loading-box">
+                        <span>⏳ 正在聚类...</span>
                     </div>
                 </div>
 
@@ -378,6 +407,9 @@ const clusterCount = computed(() => clusteredVoxelData.value.length);
                     <div v-if="mcBlocks.length" class="stat-box">
                         <span>最终方块数：<strong>{{ mcBlocks.length }}</strong></span>
                     </div>
+                    <div v-if="matchLoading" class="loading-box">
+                        <span>⏳ 正在匹配材质...</span>
+                    </div>
                     <p class="hint">已自动匹配 Minecraft 方块贴图，完成！</p>
                 </div>
             </div>
@@ -391,8 +423,11 @@ const clusterCount = computed(() => clusteredVoxelData.value.length);
                     <GLBViewer v-else :file="glbFile" :scale="1 / blockSize" />
                 </div>
                 <div v-else-if="currentStep === 2">
-                    <div v-if="!voxelCount" class="empty-state">
+                    <div v-if="!voxelCount && isProcessing" class="empty-state">
                         <span>⏳ 体素化处理中...</span>
+                    </div>
+                    <div v-else-if="!voxelCount && !isProcessing" class="empty-state">
+                        <span>⬆ 请先在步骤①导入模型</span>
                     </div>
                     <World v-else :blocks="convertedBlocks" />
                 </div>
@@ -577,6 +612,21 @@ const clusterCount = computed(() => clusteredVoxelData.value.length);
 
 .stat-box strong {
     color: #3498db;
+}
+
+.loading-box {
+    background: #fff8e1;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 0.9rem;
+    color: #f39c12;
+    margin-top: 8px;
+    animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
 }
 
 .tree-box {
