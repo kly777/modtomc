@@ -90,7 +90,11 @@ function updateGeometry(world: MCWorld, scene: THREE.Scene) {
     });
   }
   geometry.groups = groups;
-  logger.info(`updateGeometry: ${positions.length/3} verts, ${indices.length/6} faces, ${materials.length} materials`);
+  const texPaths = [...materialCache.keys()].filter(k => k.includes('imgPath'));
+  logger.info(`updateGeometry: ${positions.length/3} verts, ${indices.length/6} faces, ${materials.length} mats (${texPaths.length} textured)`);
+  if (texPaths.length > 0) {
+    logger.info(`sample tex paths: ${texPaths.slice(0, 3).map(k => JSON.parse(k).str).join(', ')}`);
+  }
   const mesh = new THREE.Mesh(geometry, materials);
   scene.add(mesh);
 }

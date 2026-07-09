@@ -292,62 +292,81 @@ let matchAbort: AbortController | null = null;
 let matchSeq = 0;
 
 watch(kClusteredVoxelData, (points) => {
+    doMatch(points);
+}, { immediate: true });
+
+async function doMatch(points: PointData[]) {
     if (!points || points.length === 0) { mcBlocks.value = []; return; }
     if (matchAbort) matchAbort.abort();
     matchAbort = new AbortController();
     const ctrl = matchAbort;
     const seq = ++matchSeq;
     matchLoading.value = true;
-    (async () => {
-        try {
-            const colors = points.map((p) => ({ r: p.color.r, g: p.color.g, b: p.color.b }));
-            const paths = await matchBlocks(colors, ctrl.signal);
-            if (seq !== matchSeq) return;
+    try {
+        const colors = points.map((p) => ({ r: p.color.r, g: p.color.g, b: p.color.b }));
+        let paths = await matchBlocks(colors, ctrl.signal);
+        if (seq !== matchSeq) return;
 
-            // 预加载所有纹理到浏览器缓存，避免渲染时出现黑色
-            const uniquePaths = new Set<string>();
-            paths.forEach(p => {
-                if (p.top) uniquePaths.add(p.top);
-                if (p.side) uniquePaths.add(p.side);
-                if (p.bottom) uniquePaths.add(p.bottom);
-                if (p.all) uniquePaths.add(p.all);
-            });
-            logger.info(`preloading ${uniquePaths.size} unique textures...`);
-            await Promise.all([...uniquePaths].map(src => new Promise<void>(resolve => {
-                const img = new Image();
-                img.onload = () => resolve();
-                img.onerror = () => resolve();  // 失败也继续
-                img.src = src;
-            })));
-            logger.info(`texture preload complete`);
+        const allTops = new Set(paths.map(p => p.top));
+        const allSides = new Set(paths.map(p => p.side));
+        logger.info(`match: ${paths.length} blocks, tops=${allTops.size} sides=${allSides.size}`);
+        const sp = paths[0];
+        logger.info(`match sample: top=${sp?.top} side=${sp?.side}`);
 
-            mcBlocks.value = points.map((voxel, i) => {
-                const face = paths[i]!;
-                const top = face.top || face.all;
-                const side = face.side || face.all;
-                const bottom = face.bottom || face.all;
-                return {
-                    position: [voxel.position.x, voxel.position.y, voxel.position.z] as [number, number, number],
-                    block: new FullBlockWithPicPath({
-                        top,
-                        bottom,
-                        front: side,
-                        back: side,
-                        left: side,
-                        right: side,
-                    }),
-                };
+        const uniquePaths = new Set<string>();
+        paths.forEach(p => {
+            if (p.top) uniquePaths.add(p.top);
+            if (p.side) uniquePaths.add(p.side);
+            if (p.bottom) uniquePaths.add(p.bottom);
+            if (p.all) uniquePaths.add(p.all);
+        });
+        logger.info(`preloading ${uniquePaths.size} textures...`);
+
+        let loaded = 0, failed = 0;
+        const failedPaths: string[] = [];
+        await Promise.all([...uniquePaths].map(async src => {
+            try {
+                const resp = await fetch(src, { method: 'HEAD' });
+                if (resp.ok) {
+                    await new Promise<void>(resolve => {
+                        const img = new Image();
+                        img.onload = () => resolve();
+                        img.onerror = () => resolve();
+                        img.src = src;
+                    });
+                    loaded++;
+                } else { failed++; failedPaths.push(src); }
+            } catch { failed++; failedPaths.push(src); }
+        }));
+        logger.info(`preload: ${loaded} ok, ${failed} failed`);
+
+        if (failedPaths.length > 0) {
+            logger.error(`failed: ${failedPaths.slice(0,10).join(', ')}`);
+            paths = paths.map(p => {
+                const fix = (t: string) => failedPaths.includes(t) ? '' : t;
+                return { top: fix(p.top), side: fix(p.side), bottom: fix(p.bottom), all: fix(p.all) };
             });
-            logger.info(`mcBlocks populated: ${mcBlocks.value.length} blocks, sample tex: ${paths[0]?.side || paths[0]?.all}`);
-        } catch (e: unknown) {
-            if (e instanceof DOMException && e.name === 'AbortError') return;
-            if (e && typeof e === 'object' && (e as any).code === 'ERR_CANCELED') return;
-            console.error("材质匹配失败:", e);
-        } finally {
-            if (matchAbort === ctrl) { matchLoading.value = false; matchAbort = null; }
         }
-    })();
-}, { immediate: true });
+
+        mcBlocks.value = points.map((voxel, i) => {
+            const face = paths[i]!;
+            const top = face.top || face.all;
+            const side = face.side || face.all;
+            const bottom = face.bottom || face.all;
+            return {
+                position: [voxel.position.x, voxel.position.y, voxel.position.z] as [number, number, number],
+                block: new FullBlockWithPicPath({ top, bottom, front: side, back: side, left: side, right: side }),
+            };
+        });
+        logger.info(`mcBlocks: ${mcBlocks.value.length}`);
+    } catch (e: unknown) {
+        if (e instanceof DOMException && e.name === 'AbortError') return;
+        if (e && typeof e === 'object' && (e as any).code === 'ERR_CANCELED') return;
+        logger.error(`match failed: ${e}`);
+    } finally {
+        if (matchAbort === ctrl) { matchLoading.value = false; matchAbort = null; }
+    }
+}
 
 // 颜色树预览（纯色方块，不用 MC 贴图）
 const colorTreeBlocks = computed<BlockData[]>(() => {

@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { type Position, Block } from "./Block";
+import { logger } from "../logger";
 
 
 const textureCache = new Map<string, THREE.Texture>();
@@ -7,7 +8,12 @@ const textureLoader = new THREE.TextureLoader();
 
 function loadTexture(path: string): THREE.Texture {
     if (textureCache.has(path)) return textureCache.get(path)!;
-    const texture = textureLoader.load(path);
+    const texture = textureLoader.load(
+        path,
+        () => logger.info(`tex loaded: ${path}`),
+        undefined,
+        () => logger.error(`tex FAILED: ${path}`),
+    );
     texture.magFilter = THREE.NearestFilter;
     texture.minFilter = THREE.LinearMipmapLinearFilter;
     texture.anisotropy = 16;
